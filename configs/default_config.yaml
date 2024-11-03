@@ -1,0 +1,43 @@
+model:
+  input_dim: 56  # Replace with your actual input dimension
+  hidden_dim: [128]
+  latent_dim: 32
+  non_linear: true
+  beta: 1.0
+  learning_rate: 0.001
+
+training:
+  mode: "direct"  # Options: "direct" or "optuna"
+  epochs: 200
+  batch_size: 64
+  early_stopping_patience: 20
+  validation_split: 0.15
+
+optuna:
+  n_trials: 100
+  study_name: "cvae_optimization"
+  search_space:
+    hidden_dim:
+      type: "categorical"
+      choices: [[32], [64], [128]]
+    latent_dim:
+      type: "categorical"
+      choices: [8, 16, 32]
+    learning_rate:
+      type: "loguniform"
+      min: 1e-5
+      max: 1e-3
+    batch_size:
+      type: "categorical"
+      choices: [32, 64, 128]
+    beta:
+      type: "categorical"
+      choices: [0.75, 1.0]
+
+paths:
+  data_dir: "data/"
+  model_dir: "models/"
+  output_dir: "output/"
+
+device:
+  gpu: true
