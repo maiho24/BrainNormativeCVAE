@@ -3,6 +3,7 @@ import yaml
 from pathlib import Path
 import sys
 import logging
+from datetime import datetime
 import torch
 import pandas as pd
 import numpy as np
@@ -14,17 +15,28 @@ from src.training.train import train_model
 from src.training.optuna_trainer import OptunaTrainer
 from src.models.cvae import cVAE
 from src.utils.data import MyDataset_labels
-from src.utils.visualization import Logger, plot_losses
+from src.utils.logger import Logger, plot_losses
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('training.log')
-    ]
-)
-logger = logging.getLogger(__name__)
+def setup_logging(model_dir):
+    """Set up logging with timestamp in filename."""
+    # Create logs directory
+    log_dir = model_dir / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create timestamp for log filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = log_dir / f'training_{timestamp}.log'
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(str(log_file))
+        ]
+    )
+    return logging.getLogger(__name__)
 
 def process_covariates(covariates_df):
     """Process covariates into the format needed by the model."""
@@ -48,7 +60,7 @@ def process_covariates(covariates_df):
         one_hot_obesity
     ))
 
-def load_and_preprocess_data(config):
+def load_and_preprocess_data(config, logger):
     """Load and preprocess training and validation data."""
     logger.info("Loading data...")
     
@@ -115,15 +127,20 @@ def main():
     for directory in [output_dir, model_dir]:
         directory.mkdir(parents=True, exist_ok=True)
 
+    # Set up logging with timestamp
+    logger = setup_logging(model_dir)
+    
     # Save the configuration
-    with open(output_dir / 'config.yaml', 'w') as f:
+    config_file = output_dir / 'config.yaml'
+    with open(config_file, 'w') as f:
         yaml.dump(config, f)
+    logger.info(f"Saved configuration to {config_file}")
 
     try:
         # Load and preprocess data
         (train_data, train_covariates, 
          val_data, val_covariates,
-         test_data, test_covariates) = load_and_preprocess_data(config)
+         test_data, test_covariates) = load_and_preprocess_data(config, logger)
 
         # Set device
         device = torch.device("cuda" if args.gpu and torch.cuda.is_available() else "cpu")
@@ -141,8 +158,10 @@ def main():
             model, best_params = trainer.run_optimization()
             
             # Save best parameters
-            with open(output_dir / 'best_params.yaml', 'w') as f:
+            params_file = output_dir / 'best_params.yaml'
+            with open(params_file, 'w') as f:
                 yaml.dump(best_params, f)
+            logger.info(f"Saved best parameters to {params_file}")
                 
         else:
             logger.info("Starting direct training with provided configuration...")
@@ -168,22 +187,10 @@ def main():
             )
 
         # Save final model
-        torch.save(model, model_dir / 'final_model.pkl')
+        model_file = model_dir / 'final_model.pkl'
+        torch.save(model, model_file)
+        logger.info(f"Saved final model to {model_file}")
         logger.info("Training completed successfully")
-        
-        # Optional: Evaluate on test set
-        model.eval()
-        with torch.no_grad():
-            test_data_tensor = torch.FloatTensor(test_data).to(device)
-            test_covariates_tensor = torch.FloatTensor(test_covariates).to(device)
-            _, test_recon_var = model.pred_recon(test_data_tensor, test_covariates_tensor, device)
-            
-            # Save test reconstruction variances
-            np.savetxt(
-                output_dir / 'test_reconstruction_vars.csv',
-                test_recon_var,
-                delimiter=','
-            )
 
     except Exception as e:
         logger.error(f"Training failed: {str(e)}")
