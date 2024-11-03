@@ -22,28 +22,7 @@ pip install BrainNormativeCVAE
 git clone https://github.com/maiho24/BrainNormativeCVAE.git
 cd BrainNormativeCVAE
 pip install -e .
-```
-## Setting Up the Environment
 
-To set up the environment for running the BrainNormativeCVAE package, follow these steps:
-
-Create the customized Python environment:
-
-```bash
-conda create --name norm python=3.9
-```
-
-Activate the Python environment:
-
-```bash
-conda activate norm
-```
-
-Install the normativecVAE package:
-
-```bash
-python setup.py install
-```
 
 ## Quick Start
 
@@ -57,7 +36,9 @@ brain-cvae-train \
     --data_dir path/to/data \
     --output_dir path/to/output \
     --gpu
+```
 
+```bash
 # Hyperparameter optimization with Optuna
 brain-cvae-train \
     --config configs/default_config.yaml \
@@ -96,7 +77,7 @@ The following covariates are expected for the current implementation:
 - Hypercholesterolemia Status (categorical)
 - Obesity Status (categorical)
 
-Feel free to modify the code as per your requirements.
+To apply the package to other covariates, modifications are required in the `process_covariates()` function located in `utils/data.py`.
 
 ## Configuration
 
