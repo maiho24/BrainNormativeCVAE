@@ -22,14 +22,14 @@ optuna:
       choices: [[32], [64], [128]]
     latent_dim:
       type: "categorical"
-      choices: [8, 16, 32]
+      choices: [16, 32]
     learning_rate:
       type: "loguniform"
       min: 1e-5
       max: 1e-3
     batch_size:
       type: "categorical"
-      choices: [32, 64, 128]
+      choices: [32, 64]
     beta:
       type: "categorical"
       choices: [0.75, 1.0]

@@ -109,7 +109,13 @@ optuna:
     learning_rate:
       min: 1e-5
       max: 1e-3
-
+    batch_size:
+      type: "categorical"
+      choices: [32, 64]
+    beta:
+      type: "categorical"
+      choices: [0.75, 1.0]
+      
 paths:
   data_dir: "data/"
   model_dir: "models/"
