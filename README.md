@@ -22,7 +22,7 @@ pip install BrainNormativeCVAE
 git clone https://github.com/maiho24/BrainNormativeCVAE.git
 cd BrainNormativeCVAE
 pip install -e .
-
+```
 
 ## Quick Start
 
