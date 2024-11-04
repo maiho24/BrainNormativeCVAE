@@ -71,7 +71,16 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
     
     best_loss = float('inf')
     patience_counter = 0
-    model_path = Path(config['paths']['model_dir']) / 'cVAE_model.pkl'
+    
+    # Save paths
+    models_dir = Path(config['paths']['model_dir'])
+    models_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save config in models directory
+    config_path = models_dir / 'config.yaml'
+    with open(config_path, 'w') as f:
+        yaml.dump(config, f)
+    logger.info(f"Saved configuration to {config_path}")
 
     # Training loop
     for epoch in range(config['training']['epochs']):
@@ -112,7 +121,7 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
         # Early stopping check
         if avg_val_loss < best_loss:
             best_loss = avg_val_loss
-            torch.save(model, model_path)
+            best_model = model.state_dict()
             patience_counter = 0
             logger.info(f'Epoch {epoch}: New best model saved')
         else:
@@ -136,8 +145,8 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
         logger.info(f"Epoch {epoch}: Train Loss = {avg_train_loss:.4f}, Val Loss = {avg_val_loss:.4f}")
 
     # Plot and save training curves
-    plot_losses(train_logger, config['paths']['output_dir'], '_training_validation')
+    plot_losses(train_logger, models_dir, '_training_validation')
     
     # Load and return best model
-    best_model = torch.load(model_path)
-    return best_model
+    model.load_state_dict(best_model)
+    return model

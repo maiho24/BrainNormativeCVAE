@@ -23,28 +23,38 @@ pip install -e .
 ### Training a Model
 
 ```bash
+# Show help message and available options
+brain-cvae-train --help
+
 # Direct training with specified parameters
 brain-cvae-train \
     --config configs/default_config.yaml \
-    --mode direct
-```
+    --mode direct \
+    --output_dir path/to/output \
+    --gpu
 
-```bash
 # Hyperparameter optimization with Optuna
 brain-cvae-train \
     --config configs/default_config.yaml \
-    --mode optuna
+    --mode optuna \
+    --output_dir path/to/output \
+    --gpu
 ```
 
 ### Running Inference
 
 ```bash
+# Show help message and available options
+brain-cvae-inference --help
+
+# Run inference and bootstrap analysis
 brain-cvae-inference \
-    --model_path path/to/model.pkl \
-    --data_dir path/to/test_data \
-    --output_dir path/to/results \
+    --model_path path/to/output/models/final_model.pkl \
+    --config configs/default_config.yaml \
+    --output_dir path/to/output \
     --num_samples 1000 \
-    --num_bootstraps 1000
+    --num_bootstraps 1000 \
+    --gpu
 ```
 
 ## Data Format
@@ -73,7 +83,7 @@ Create a YAML configuration file with the following structure:
 
 ```yaml
 model:
-  input_dim: 56
+  input_dim: 56 # Replace with your actual input dimension
   hidden_dim: [128]
   latent_dim: 32
   non_linear: true
@@ -87,7 +97,7 @@ training:
   early_stopping_patience: 20
   validation_split: 0.15
 
-optuna: # Optional
+optuna: # Optional, for hyperparameter optimization
   n_trials: 100
   study_name: "cvae_optimization"
   search_space:
@@ -107,22 +117,63 @@ optuna: # Optional
       
 paths:
   data_dir: "path/to/data/"
-  model_dir: "path/to/models/"
   output_dir: "path/to/output/"
+
+device:
+  gpu: false  # Set to true to use GPU if available
 ```
 
-## Output Files
+## Output Directory Structure
 
-### Training
-- final_model.pkl: Trained model
-- config.yaml: Used configuration
-- best_params.yaml: Best hyperparameters (Optuna mode)
-- Losses_training_validation.png: Training curves
+The package organizes all outputs in a consistent directory structure:
 
-### Inference
-- test_reconstruction_vars.csv: Reconstruction variances
-- bootstrapped_means.csv: Bootstrap analysis means
-- bootstrapped_variances.csv: Bootstrap analysis variances
+```
+output_dir/
+├── logs/                               # Logging directory
+│   ├── training_YYYYMMDD_HHMMSS.log   # Training process logs
+│   └── inference_YYYYMMDD_HHMMSS.log  # Inference and bootstrap analysis logs
+│
+├── models/                             # Model directory
+│   ├── config.yaml                     # Training configuration parameters
+│   ├── final_model.pkl                # Saved trained model
+│   └── best_params.yaml               # Best hyperparameters (Optuna mode only)
+│
+└── results/                            # Analysis results directory
+    ├── reconstruction_variances.csv    # Model's reconstruction uncertainty for test data
+    │
+    ├── bootstrapped_means.csv         # Mean predictions for each covariate combination
+    ├── bootstrapped_variances.csv     # Variance of predictions for each combination
+    │
+    ├── ci_means_lower.csv            # Lower confidence interval bounds for means
+    ├── ci_means_upper.csv            # Upper confidence interval bounds for means
+    ├── ci_variances_lower.csv        # Lower confidence interval bounds for variances
+    ├── ci_variances_upper.csv        # Upper confidence interval bounds for variances
+    │
+    ├── feature_variability.csv       # Variability of each feature across covariates
+    ├── covariate_sensitivity.csv     # Impact of each covariate on predictions
+    └── summary_statistics.xlsx       # Overall statistical summary of results
+```
+
+### Results File Descriptions
+
+#### Reconstruction Analysis
+- `reconstruction_variances.csv`: Model's uncertainty in reconstructing test data points, indicating reliability of predictions
+
+#### Bootstrap Analysis Results
+- `bootstrapped_means.csv`: Average predictions for each covariate combination across bootstrap samples
+- `bootstrapped_variances.csv`: Variation in predictions for each covariate combination across bootstrap samples
+- `ci_means_lower.csv`: Lower bound of confidence interval for mean predictions
+- `ci_means_upper.csv`: Upper bound of confidence interval for mean predictions
+- `ci_variances_lower.csv`: Lower bound of confidence interval for prediction variances
+- `ci_variances_upper.csv`: Upper bound of confidence interval for prediction variances
+
+#### Feature Analysis
+- `feature_variability.csv`: Measures how much each feature varies across different covariate combinations
+- `covariate_sensitivity.csv`: Quantifies how much each covariate influences the predictions
+- `summary_statistics.xlsx`: Comprehensive statistical summary including:
+  - Global means and standard deviations
+  - Quantile distributions (25th, 50th, 75th percentiles)
+  - Summary statistics for both means and variances
 
 ## Contributing
 
@@ -134,7 +185,7 @@ This implementation extends the normative modelling framework by [Lawry Aguila e
 
 If you use this package, please cite both our work and the original implementation:
 
-bibtex
+```bibtex
 @software{brainnormativecvae2024,
   author = {Ho. M},
   title = {An Enhanced Conditional Variational Autoencoder-Based Normative Model with Latent Space Sampling and Bootstrapping for Neuroimaging Analysis},
@@ -148,3 +199,4 @@ bibtex
   year = {2022},
   url = {https://github.com/alawryaguila/normativecVAE}
 }
+```

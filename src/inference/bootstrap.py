@@ -7,12 +7,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
-    """
+     """
     Generate bootstrap statistics for different covariate combinations.
     
     Args:
         model: Trained cVAE model
-        covariates_df: DataFrame containing covariates
+        covariates_df: DataFrame containing raw covariates
         config: Configuration dictionary
         num_samples: Number of samples per covariate combination
         num_bootstraps: Number of bootstrap iterations
@@ -23,8 +23,13 @@ def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_sam
     model.eval()
     
     try:
-        # Process covariates
-        covariates_tensor = torch.FloatTensor(covariates_df.values).to(device)
+        # Process covariates using the same function as training
+        covariates_processed = process_covariates(covariates_df)
+        covariates_tensor = torch.FloatTensor(covariates_processed).to(device)
+        
+        # Setup results directory
+        results_dir = Path(config['paths']['output_dir']) / 'results'
+        results_dir.mkdir(parents=True, exist_ok=True)
         
         bootstrap_means_list = []
         bootstrap_variances_list = []
@@ -129,8 +134,8 @@ def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_sam
         }
         
         for filename, df in results.items():
-            df.to_csv(output_dir / filename, index=False)
-        
+            df.to_csv(results_dir / filename, index=False)
+            
         logger.info("Bootstrap analysis completed successfully")
         return results
         
@@ -139,14 +144,7 @@ def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_sam
         raise
 
 def compute_feature_importance(bootstrap_results, covariates_df, config):
-    """
-    Compute feature importance based on bootstrap results.
-    
-    Args:
-        bootstrap_results: Dictionary containing bootstrap analysis results
-        covariates_df: DataFrame containing covariates
-        config: Configuration dictionary
-    """
+    """Compute feature importance based on bootstrap results."""
     try:
         means_df = bootstrap_results['bootstrapped_means.csv']
         variances_df = bootstrap_results['bootstrapped_variances.csv']
@@ -157,19 +155,18 @@ def compute_feature_importance(bootstrap_results, covariates_df, config):
         # Calculate feature sensitivity to different covariates
         covariate_sensitivity = {}
         for covariate in covariates_df.columns:
-            # Group by covariate and calculate mean difference
             groups = means_df.groupby(covariate)
             max_diff = groups.mean().max() - groups.mean().min()
             covariate_sensitivity[covariate] = max_diff
             
-        # Save results
-        output_dir = Path(config['paths']['output_dir'])
+        # Save results in results directory
+        results_dir = Path(config['paths']['output_dir']) / 'results'
         
         pd.DataFrame({
             'feature_variability': feature_variability
-        }).to_csv(output_dir / 'feature_variability.csv')
+        }).to_csv(results_dir / 'feature_variability.csv')
         
-        pd.DataFrame(covariate_sensitivity).to_csv(output_dir / 'covariate_sensitivity.csv')
+        pd.DataFrame(covariate_sensitivity).to_csv(results_dir / 'covariate_sensitivity.csv')
         
         logger.info("Feature importance analysis completed")
         return feature_variability, covariate_sensitivity
@@ -179,13 +176,7 @@ def compute_feature_importance(bootstrap_results, covariates_df, config):
         raise
 
 def generate_summary_statistics(bootstrap_results, config):
-    """
-    Generate summary statistics from bootstrap results.
-    
-    Args:
-        bootstrap_results: Dictionary containing bootstrap analysis results
-        config: Configuration dictionary
-    """
+    """Generate summary statistics from bootstrap results."""
     try:
         means_df = bootstrap_results['bootstrapped_means.csv']
         variances_df = bootstrap_results['bootstrapped_variances.csv']
@@ -203,10 +194,10 @@ def generate_summary_statistics(bootstrap_results, config):
             }
         }
         
-        # Save results
-        output_dir = Path(config['paths']['output_dir'])
+        # Save results in results directory
+        results_dir = Path(config['paths']['output_dir']) / 'results'
         
-        with pd.ExcelWriter(output_dir / 'summary_statistics.xlsx') as writer:
+        with pd.ExcelWriter(results_dir / 'summary_statistics.xlsx') as writer:
             for stat_type, stats in summary_stats.items():
                 for stat_name, stat_value in stats.items():
                     stat_value.to_excel(writer, sheet_name=f'{stat_type}_{stat_name}')

@@ -173,21 +173,19 @@ class OptunaTrainer:
                 logger.info(f"\t{key}: {value}")
             
             # Save best parameters
-            output_dir = Path(self.config['paths']['output_dir'])
-            with open(output_dir / 'best_params.yaml', 'w') as f:
+            with open(self.models_dir / 'best_params.yaml', 'w') as f:
                 yaml.dump(best_params, f)
+            logger.info(f"Saved best parameters to {self.models_dir / 'best_params.yaml'}")
             
             # Train final model with best parameters
             trial = optuna.trial.FixedTrial(best_params)
             final_model, _ = self.create_model(trial)
             final_model = final_model.to(self.device)
             
-            # Save the final model
-            torch.save(final_model, output_dir / 'best_model.pkl')
-            
-            # Save study statistics
+            # Save study statistics in models directory
             df_study = self.study.trials_dataframe()
-            df_study.to_csv(output_dir / 'optuna_study_results.csv', index=False)
+            df_study.to_csv(self.models_dir / 'optuna_study_results.csv', index=False)
+            logger.info(f"Saved study results to {self.models_dir / 'optuna_study_results.csv'}")
             
             return final_model, best_params
             

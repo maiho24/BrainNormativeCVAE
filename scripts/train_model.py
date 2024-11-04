@@ -8,7 +8,6 @@ import torch
 import pandas as pd
 import numpy as np
 
-# Add src to python path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from src.training.train import train_model
@@ -17,15 +16,69 @@ from src.models.cvae import cVAE
 from src.utils.data import MyDataset_labels
 from src.utils.logger import Logger, plot_losses
 
-def setup_logging(model_dir):
+def create_parser():
+    """Create argument parser with detailed help messages."""
+    parser = argparse.ArgumentParser(
+        description="""
+        Brain Normative cVAE Model Training
+        
+        This script trains a conditional Variational Autoencoder (cVAE) for normative modeling 
+        of brain imaging data. It supports both direct training with specified parameters and 
+        hyperparameter optimization using Optuna.
+        
+        Example usage:
+          brain-cvae-train --config configs/my_config.yaml --mode direct --gpu
+          brain-cvae-train --config configs/optuna_config.yaml --mode optuna
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    parser.add_argument(
+        '--config', 
+        type=str, 
+        default='configs/default_config.yaml',
+        help='Path to configuration file (default: configs/default_config.yaml)'
+    )
+    
+    parser.add_argument(
+        '--data_dir', 
+        type=str,
+        help='Override data directory specified in config file'
+    )
+    
+    parser.add_argument(
+        '--output_dir', 
+        type=str,
+        help='Override output directory specified in config file'
+    )
+    
+    parser.add_argument(
+        '--mode', 
+        type=str, 
+        choices=['direct', 'optuna'],
+        default='direct',
+        help='''Training mode:
+        direct: Train with parameters specified in config file
+        optuna: Perform hyperparameter optimization (default: direct)'''
+    )
+    
+    parser.add_argument(
+        '--gpu', 
+        action='store_true',
+        help='Use GPU for training if available'
+    )
+    
+    return parser
+    
+def setup_logging(output_dir, script_name):
     """Set up logging with timestamp in filename."""
     # Create logs directory
-    log_dir = model_dir / 'logs'
+    log_dir = output_dir / 'logs'
     log_dir.mkdir(parents=True, exist_ok=True)
     
     # Create timestamp for log filename
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    log_file = log_dir / f'training_{timestamp}.log'
+    log_file = log_dir / f'{script_name}_{timestamp}.log'
     
     # Configure logging
     logging.basicConfig(
@@ -100,14 +153,14 @@ def load_and_preprocess_data(config, logger):
             test_data_np, test_covariates_processed)
 
 def main():
-    parser = argparse.ArgumentParser(description="Train Normative cVAE Model")
-    parser.add_argument('--config', type=str, default='configs/default_config.yaml',
-                      help='Path to configuration file')
-    parser.add_argument('--data_dir', type=str, help='Override data directory from config')
-    parser.add_argument('--output_dir', type=str, help='Override output directory from config')
-    parser.add_argument('--mode', type=str, choices=['direct', 'optuna'], default='direct',
-                      help='Training mode: direct training or Optuna optimization')
-    parser.add_argument('--gpu', action='store_true', help='Use GPU for training')
+    # Create parser with detailed help
+    parser = create_parser()
+    
+    # Show help if no arguments provided
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+        
     args = parser.parse_args()
 
     # Load configuration
@@ -128,7 +181,7 @@ def main():
         directory.mkdir(parents=True, exist_ok=True)
 
     # Set up logging with timestamp
-    logger = setup_logging(model_dir)
+    logger = setup_logging(output_dir, 'training')
     
     # Save the configuration
     config_file = output_dir / 'config.yaml'
@@ -156,28 +209,9 @@ def main():
                 config=config
             )
             model, best_params = trainer.run_optimization()
-            
-            # Save best parameters
-            params_file = output_dir / 'best_params.yaml'
-            with open(params_file, 'w') as f:
-                yaml.dump(best_params, f)
-            logger.info(f"Saved best parameters to {params_file}")
                 
         else:
             logger.info("Starting direct training with provided configuration...")
-            # Create model
-            model = cVAE(
-                input_dim=train_data.shape[1],
-                hidden_dim=config['model']['hidden_dim'],
-                latent_dim=config['model']['latent_dim'],
-                c_dim=train_covariates.shape[1],
-                learning_rate=config['model']['learning_rate'],
-                beta=config['model']['beta'],
-                non_linear=config['model']['non_linear']
-            )
-            model = model.to(device)
-            
-            # Train model
             model = train_model(
                 train_data=train_data,
                 train_covariates=train_covariates,
@@ -187,7 +221,7 @@ def main():
             )
 
         # Save final model
-        model_file = model_dir / 'final_model.pkl'
+        model_file = Path(config['paths']['model_dir']) / 'final_model.pkl'
         torch.save(model, model_file)
         logger.info(f"Saved final model to {model_file}")
         logger.info("Training completed successfully")

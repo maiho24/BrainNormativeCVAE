@@ -13,7 +13,7 @@ training:
   early_stopping_patience: 20
   validation_split: 0.15
 
-optuna:
+optuna: # Optional
   n_trials: 100
   study_name: "cvae_optimization"
   search_space:
@@ -36,7 +36,6 @@ optuna:
 
 paths:
   data_dir: "path/to/data/"
-  model_dir: "path/to/models/"
   output_dir: "path/to/output/"
 
 device:
