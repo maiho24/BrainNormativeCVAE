@@ -133,7 +133,8 @@ def main():
 
     # Create output directories
     output_dir = Path(config['paths']['output_dir'])
-    model_dir = Path(config['paths']['model_dir'])
+    model_dir = output_dir / 'models'
+    config['paths']['model_dir'] = str(model_dir)
     for directory in [output_dir, model_dir]:
         directory.mkdir(parents=True, exist_ok=True)
 
@@ -141,7 +142,7 @@ def main():
     logger = setup_logging(output_dir, 'training')
     
     # Save the configuration
-    config_file = output_dir / 'config.yaml'
+    config_file = model_dir / 'config.yaml'
     with open(config_file, 'w') as f:
         yaml.dump(config, f)
     logger.info(f"Saved configuration to {config_file}")

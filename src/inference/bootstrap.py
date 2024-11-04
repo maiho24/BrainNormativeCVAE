@@ -4,10 +4,12 @@ import pandas as pd
 from pathlib import Path
 import logging
 
+from ..utils.data import process_covariates
+
 logger = logging.getLogger(__name__)
 
 def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
-     """
+    """
     Generate bootstrap statistics for different covariate combinations.
     
     Args:
