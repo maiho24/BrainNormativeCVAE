@@ -119,10 +119,10 @@ def load_and_preprocess_data(config, logger):
     
     # Load raw data
     data_path = Path(config['paths']['data_dir'])
-    train_data = pd.read_csv(data_path / 'train_data_subset.csv')
-    train_covariates = pd.read_csv(data_path / 'train_covariates_subset.csv')
-    test_data = pd.read_csv(data_path / 'test_data_subset.csv')
-    test_covariates = pd.read_csv(data_path / 'test_covariates_subset.csv')
+    train_data = pd.read_csv(data_path / 'train_data.csv')
+    train_covariates = pd.read_csv(data_path / 'train_covariates.csv')
+    test_data = pd.read_csv(data_path / 'test_data.csv')
+    test_covariates = pd.read_csv(data_path / 'test_covariates.csv')
     
     # Process covariates
     train_covariates_processed = process_covariates(train_covariates)

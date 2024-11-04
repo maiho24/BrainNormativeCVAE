@@ -60,10 +60,10 @@ brain-cvae-inference \
 ## Data Format
 
 ### Required Files
-- train_data_subset.csv: Training data features
-- train_covariates_subset.csv: Training data covariates
-- test_data_subset.csv: Test data features
-- test_covariates_subset.csv: Test data covariates
+- `train_data.csv`: Training data features
+- `train_covariates.csv`: Training data covariates
+- `test_data.csv`: Test data features
+- `test_covariates.csv`: Test data covariates
 
 ### Covariate Structure
 The following covariates are expected for the current implementation:
@@ -130,28 +130,28 @@ The package organizes all outputs in a consistent directory structure:
 ```
 output_dir/
 ├── logs/                               # Logging directory
-│   ├── training_YYYYMMDD_HHMMSS.log   # Training process logs
-│   └── inference_YYYYMMDD_HHMMSS.log  # Inference and bootstrap analysis logs
+│   ├── training_YYYYMMDD_HHMMSS.log    # Training process logs
+│   └── inference_YYYYMMDD_HHMMSS.log   # Inference and bootstrap analysis logs
 │
 ├── models/                             # Model directory
 │   ├── config.yaml                     # Training configuration parameters
-│   ├── final_model.pkl                # Saved trained model
-│   └── best_params.yaml               # Best hyperparameters (Optuna mode only)
+│   ├── final_model.pkl                 # Saved trained model
+│   └── best_params.yaml                # Best hyperparameters (Optuna mode only)
 │
 └── results/                            # Analysis results directory
     ├── reconstruction_variances.csv    # Model's reconstruction uncertainty for test data
     │
-    ├── bootstrapped_means.csv         # Mean predictions for each covariate combination
-    ├── bootstrapped_variances.csv     # Variance of predictions for each combination
+    ├── bootstrapped_means.csv          # Mean predictions for each covariate combination
+    ├── bootstrapped_variances.csv      # Variance of predictions for each combination
     │
-    ├── ci_means_lower.csv            # Lower confidence interval bounds for means
-    ├── ci_means_upper.csv            # Upper confidence interval bounds for means
-    ├── ci_variances_lower.csv        # Lower confidence interval bounds for variances
-    ├── ci_variances_upper.csv        # Upper confidence interval bounds for variances
+    ├── ci_means_lower.csv              # Lower confidence interval bounds for means
+    ├── ci_means_upper.csv              # Upper confidence interval bounds for means
+    ├── ci_variances_lower.csv          # Lower confidence interval bounds for variances
+    ├── ci_variances_upper.csv          # Upper confidence interval bounds for variances
     │
-    ├── feature_variability.csv       # Variability of each feature across covariates
-    ├── covariate_sensitivity.csv     # Impact of each covariate on predictions
-    └── summary_statistics.xlsx       # Overall statistical summary of results
+    ├── feature_variability.csv         # Variability of each feature across covariates
+    ├── covariate_sensitivity.csv       # Impact of each covariate on predictions
+    └── summary_statistics.xlsx         # Overall statistical summary of results
 ```
 
 ### Results File Descriptions
@@ -188,7 +188,7 @@ If you use this package, please cite both our work and the original implementati
 ```bibtex
 @software{brainnormativecvae2024,
   author = {Ho. M},
-  title = {An Enhanced Conditional Variational Autoencoder-Based Normative Model with Latent Space Sampling and Bootstrapping for Neuroimaging Analysis},
+  title = {An Enhanced Conditional Variational Autoencoder-Based Normative Model for Neuroimaging Analysis},
   year = {2024},
   url = {https://github.com/maiho24/BrainNormativeCVAE}
 }
