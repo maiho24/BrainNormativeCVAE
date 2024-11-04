@@ -12,10 +12,20 @@ BrainNormativeCVAE is a comprehensive toolkit for building and applying normativ
 
 ## Installation
 
+1. Create and activate a new conda environment:
+```bash
+conda create -n brain_cvae python=3.9
+conda activate brain_cvae
+```
+2. Clone and install the package:
 ```bash
 git clone https://github.com/maiho24/BrainNormativeCVAE.git
 cd BrainNormativeCVAE
 pip install -e .
+```
+Note: Make sure to always activate the environment before using the package:
+```bash
+conda activate brain_cvae
 ```
 
 ## Quick Start
@@ -83,8 +93,8 @@ Create a YAML configuration file with the following structure:
 
 ```yaml
 model:
-  input_dim: 56 # Replace with your actual input dimension
-  hidden_dim: [128]
+  input_dim: 56  # Replace with your actual input dimension
+  hidden_dim: [128]  # Architecture of hidden layers, e.g., [128, 64] means two hidden layers with 128 and 64 neurons
   latent_dim: 32
   non_linear: true
   beta: 1.0

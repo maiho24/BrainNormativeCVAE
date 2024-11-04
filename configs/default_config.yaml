@@ -1,6 +1,6 @@
 model:
   input_dim: 56  # Replace with your actual input dimension
-  hidden_dim: [128]
+  hidden_dim: [128]  # Architecture of hidden layers, e.g., [128, 64] means two hidden layers with 128 and 64 neurons
   latent_dim: 32
   non_linear: true
   beta: 1.0
