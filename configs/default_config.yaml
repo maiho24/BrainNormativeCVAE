@@ -35,9 +35,9 @@ optuna:
       choices: [0.75, 1.0]
 
 paths:
-  data_dir: "data/"
-  model_dir: "models/"
-  output_dir: "output/"
+  data_dir: "path/to/data/"
+  model_dir: "path/to/models/"
+  output_dir: "path/to/output/"
 
 device:
   gpu: true

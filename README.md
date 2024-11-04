@@ -12,12 +12,6 @@ BrainNormativeCVAE is a comprehensive toolkit for building and applying normativ
 
 ## Installation
 
-### From PyPI
-```bash
-pip install BrainNormativeCVAE
-```
-
-### From Source
 ```bash
 git clone https://github.com/maiho24/BrainNormativeCVAE.git
 cd BrainNormativeCVAE
@@ -112,9 +106,9 @@ optuna: # Optional
       choices: [0.75, 1.0]
       
 paths:
-  data_dir: "data/"
-  model_dir: "models/"
-  output_dir: "output/"
+  data_dir: "path/to/data/"
+  model_dir: "path/to/models/"
+  output_dir: "path/to/output/"
 ```
 
 ## Output Files
@@ -129,7 +123,6 @@ paths:
 - test_reconstruction_vars.csv: Reconstruction variances
 - bootstrapped_means.csv: Bootstrap analysis means
 - bootstrapped_variances.csv: Bootstrap analysis variances
-- Bootstrap confidence intervals and visualization plots
 
 ## Contributing
 
