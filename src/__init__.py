@@ -19,5 +19,5 @@ from . import inference
 from . import utils
 
 __version__ = '0.1.0'
-__author__ = 'M. Ho'
+__author__ = 'M. Ho, Y. Song, P. Sachdev, J. Jiang, W. Wen'
 __credits__ = ['A. Lawry Aguila', 'J. Capman', 'M. Janahi', 'A. Altman']

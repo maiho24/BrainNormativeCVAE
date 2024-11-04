@@ -12,7 +12,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.inference.inference import run_inference
 from src.inference.bootstrap import generate_bootstrap_stats_by_covariates
 from src.models.cvae import load_model
-from src.utils.data import load_test_data, process_covariates
+from src.utils.data import load_test_data, process_covariates, setup_logging
 
 def create_parser():
     """Create argument parser with detailed help messages."""
@@ -79,27 +79,6 @@ def create_parser():
     )
     
     return parser
-
-def setup_logging(output_dir, script_name):
-    """Set up logging with timestamp in filename."""
-    # Create logs directory
-    log_dir = output_dir / 'logs'
-    log_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create timestamp for log filename
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    log_file = log_dir / f'{script_name}_{timestamp}.log'
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(str(log_file))
-        ]
-    )
-    return logging.getLogger(__name__)
 
 def main():
     # Create parser with detailed help

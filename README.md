@@ -187,7 +187,7 @@ If you use this package, please cite both our work and the original implementati
 
 ```bibtex
 @software{brainnormativecvae2024,
-  author = {Ho. M},
+  author = {Ho, M., Song, Y., Sachdev, P., Jiang, J., Wen, W.},
   title = {An Enhanced Conditional Variational Autoencoder-Based Normative Model for Neuroimaging Analysis},
   year = {2024},
   url = {https://github.com/maiho24/BrainNormativeCVAE}

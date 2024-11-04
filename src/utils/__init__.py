@@ -6,7 +6,8 @@ from .data import (
 )
 from .logger import (
     Logger,
-    plot_losses
+    plot_losses,
+    setup_logging
 )
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     'load_data',
     'load_test_data',
     'Logger',
-    'plot_losses'
+    'plot_losses',
+    'setup_logging'
 ]

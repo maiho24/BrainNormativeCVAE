@@ -1,6 +1,7 @@
+import logging
+from datetime import datetime
 import matplotlib.pyplot as plt
 from pathlib import Path
-
 
 class Logger:
     def __init__(self):
@@ -49,3 +50,24 @@ def plot_losses(logger, path, title=''):
     save_path = Path(path) / f"Losses{title}.png"
     plt.savefig(save_path)
     plt.close()
+    
+def setup_logging(output_dir, script_name):
+    """Set up logging with timestamp in filename."""
+    # Create logs directory
+    log_dir = output_dir / 'logs'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create timestamp for log filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = log_dir / f'{script_name}_{timestamp}.log'
+    
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(str(log_file))
+        ]
+    )
+    return logging.getLogger(__name__)

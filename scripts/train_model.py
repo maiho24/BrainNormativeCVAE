@@ -13,8 +13,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.training.train import train_model
 from src.training.optuna_trainer import OptunaTrainer
 from src.models.cvae import cVAE
-from src.utils.data import MyDataset_labels
-from src.utils.logger import Logger, plot_losses
+from src.utils.data import MyDataset_labels, process_covariates
+from src.utils.logger import Logger, plot_losses, setup_logging
 
 def create_parser():
     """Create argument parser with detailed help messages."""
@@ -69,49 +69,6 @@ def create_parser():
     )
     
     return parser
-    
-def setup_logging(output_dir, script_name):
-    """Set up logging with timestamp in filename."""
-    # Create logs directory
-    log_dir = output_dir / 'logs'
-    log_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Create timestamp for log filename
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    log_file = log_dir / f'{script_name}_{timestamp}.log'
-    
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(str(log_file))
-        ]
-    )
-    return logging.getLogger(__name__)
-
-def process_covariates(covariates_df):
-    """Process covariates into the format needed by the model."""
-    # Extract continuous variables
-    age_icv = covariates_df[['Age', 'wb_EstimatedTotalIntraCranial_Vol']].values
-    
-    # Process categorical variables
-    one_hot_sex = pd.get_dummies(covariates_df['Sex'], prefix='Sex').values
-    one_hot_diabetes = pd.get_dummies(covariates_df['Diabetes Status'], prefix='Diabetes').values
-    one_hot_smoking = pd.get_dummies(covariates_df['Smoking Status'], prefix='Smoking').values
-    one_hot_hypercholesterolemia = pd.get_dummies(covariates_df['Hypercholesterolemia Status'], prefix='Hypercholesterolemia').values
-    one_hot_obesity = pd.get_dummies(covariates_df['Obesity Status'], prefix='Obesity').values
-    
-    # Combine all covariates
-    return np.hstack((
-        age_icv, 
-        one_hot_sex,
-        one_hot_diabetes, 
-        one_hot_smoking,
-        one_hot_hypercholesterolemia, 
-        one_hot_obesity
-    ))
 
 def load_and_preprocess_data(config, logger):
     """Load and preprocess training and validation data."""
