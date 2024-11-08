@@ -4,17 +4,15 @@ import pandas as pd
 from pathlib import Path
 import logging
 
-from ..utils.data import process_covariates
-
 logger = logging.getLogger(__name__)
 
-def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
+def generate_bootstrap_stats_by_covariates(model, covariates, feature_cols, config, num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
     """
     Generate bootstrap statistics for different covariate combinations.
     
     Args:
         model: Trained cVAE model
-        covariates_df: DataFrame containing raw covariates
+        covariates: Processed covariates
         config: Configuration dictionary
         num_samples: Number of samples per covariate combination
         num_bootstraps: Number of bootstrap iterations
@@ -26,8 +24,7 @@ def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_sam
     
     try:
         # Process covariates using the same function as training
-        covariates_processed = process_covariates(covariates_df)
-        covariates_tensor = torch.FloatTensor(covariates_processed).to(device)
+        covariates_tensor = torch.FloatTensor(covariates).to(device)
         
         # Setup results directory
         results_dir = Path(config['paths']['output_dir']) / 'results'
@@ -79,7 +76,6 @@ def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_sam
             ci_variances = np.percentile(bootstrap_variances, [lower_percentile, upper_percentile], axis=0)
             
             # Store results
-            # Store results
             bootstrap_means_list.append(mean_of_bootstrap_means)
             bootstrap_variances_list.append(mean_of_bootstrap_variances)
             ci_means_list.append(ci_means)
@@ -88,42 +84,28 @@ def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_sam
             if (idx + 1) % 10 == 0:
                 logger.info(f"Processed {idx + 1}/{len(covariates_tensor)} covariate combinations")
         
-        # Create output DataFrames
-        output_dir = Path(config['paths']['output_dir'])
+        # Convert lists to numpy arrays
+        bootstrap_means_array = np.array(bootstrap_means_list)
+        bootstrap_variances_array = np.array(bootstrap_variances_list)
+        ci_means_array = np.array(ci_means_list)
+        ci_variances_array = np.array(ci_variances_list)
         
-        # Create column names for the features
-        feature_cols = [f'feature_{i}' for i in range(bootstrap_means_list[0].shape[0])]
+        # Create DataFrames from numpy arrays
+        bootstrap_means_results = pd.DataFrame(bootstrap_means_array, columns=feature_cols)
+        bootstrap_variances_results = pd.DataFrame(bootstrap_variances_array, columns=feature_cols)
+        ci_means_lower_results = pd.DataFrame([ci[0] for ci in ci_means_array], columns=feature_cols)
+        ci_means_upper_results = pd.DataFrame([ci[1] for ci in ci_means_array], columns=feature_cols)
+        ci_variances_lower_results = pd.DataFrame([ci[0] for ci in ci_variances_array], columns=feature_cols)
+        ci_variances_upper_results = pd.DataFrame([ci[1] for ci in ci_variances_array], columns=feature_cols)
+        covariates_df = pd.DataFrame(covariates)
         
         # Combine results with original covariates
-        bootstrap_means_df = pd.concat([
-            covariates_df,
-            pd.DataFrame(bootstrap_means_list, columns=feature_cols)
-        ], axis=1)
-        
-        bootstrap_variances_df = pd.concat([
-            covariates_df,
-            pd.DataFrame(bootstrap_variances_list, columns=feature_cols)
-        ], axis=1)
-        
-        ci_means_lower_df = pd.concat([
-            covariates_df,
-            pd.DataFrame([ci[0] for ci in ci_means_list], columns=feature_cols)
-        ], axis=1)
-        
-        ci_means_upper_df = pd.concat([
-            covariates_df,
-            pd.DataFrame([ci[1] for ci in ci_means_list], columns=feature_cols)
-        ], axis=1)
-        
-        ci_variances_lower_df = pd.concat([
-            covariates_df,
-            pd.DataFrame([ci[0] for ci in ci_variances_list], columns=feature_cols)
-        ], axis=1)
-        
-        ci_variances_upper_df = pd.concat([
-            covariates_df,
-            pd.DataFrame([ci[1] for ci in ci_variances_list], columns=feature_cols)
-        ], axis=1)
+        bootstrap_means_df = pd.concat([covariates_df, bootstrap_means_results], axis=1)
+        bootstrap_variances_df = pd.concat([covariates_df, bootstrap_variances_results], axis=1)
+        ci_means_lower_df = pd.concat([covariates_df, ci_means_lower_results], axis=1)
+        ci_means_upper_df = pd.concat([covariates_df, ci_means_upper_results], axis=1)
+        ci_variances_lower_df = pd.concat([covariates_df, ci_variances_lower_results], axis=1)
+        ci_variances_upper_df = pd.concat([covariates_df, ci_variances_upper_results], axis=1)
         
         # Save results
         results = {
@@ -145,20 +127,32 @@ def generate_bootstrap_stats_by_covariates(model, covariates_df, config, num_sam
         logger.error(f"Bootstrap analysis failed: {str(e)}")
         raise
 
-def compute_feature_importance(bootstrap_results, covariates_df, config):
-    """Compute feature importance based on bootstrap results."""
+def compute_feature_importance(bootstrap_results, covariates_df, feature_cols, config):
+    """
+    Compute feature importance based on bootstrap results.
+    
+    Args:
+        bootstrap_results: Dictionary containing DataFrames with bootstrap results
+        covariates_df: DataFrame containing original covariates
+        config: Configuration dictionary
+    """
     try:
         means_df = bootstrap_results['bootstrapped_means.csv']
-        variances_df = bootstrap_results['bootstrapped_variances.csv']
+        means_features = means_df[feature_cols]
         
         # Calculate feature variability across different covariate combinations
-        feature_variability = means_df.std()
+        feature_variability = means_features.std()
         
         # Calculate feature sensitivity to different covariates
         covariate_sensitivity = {}
+        
+        # Create a DataFrame that combines covariates with features
+        analysis_df = pd.concat([covariates_df.reset_index(drop=True), means_features], axis=1)
+        
         for covariate in covariates_df.columns:
-            groups = means_df.groupby(covariate)
-            max_diff = groups.mean().max() - groups.mean().min()
+            groups = analysis_df.groupby(covariate)
+            # Calculate differences only for feature columns
+            max_diff = groups[feature_cols].mean().max() - groups[feature_cols].mean().min()
             covariate_sensitivity[covariate] = max_diff
             
         # Save results in results directory
@@ -177,22 +171,24 @@ def compute_feature_importance(bootstrap_results, covariates_df, config):
         logger.error(f"Feature importance analysis failed: {str(e)}")
         raise
 
-def generate_summary_statistics(bootstrap_results, config):
+def generate_summary_statistics(bootstrap_results, feature_cols, config):
     """Generate summary statistics from bootstrap results."""
     try:
         means_df = bootstrap_results['bootstrapped_means.csv']
+        means_features = means_df[feature_cols]
         variances_df = bootstrap_results['bootstrapped_variances.csv']
+        variances_features = variances_df[feature_cols]
         
         summary_stats = {
             'mean_statistics': {
-                'global_mean': means_df.mean(),
-                'global_std': means_df.std(),
-                'quantiles': means_df.quantile([0.25, 0.5, 0.75])
+                'global_mean': means_features.mean(),
+                'global_std': means_features.std(),
+                'quantiles': means_features.quantile([0.25, 0.5, 0.75])
             },
             'variance_statistics': {
-                'global_mean': variances_df.mean(),
-                'global_std': variances_df.std(),
-                'quantiles': variances_df.quantile([0.25, 0.5, 0.75])
+                'global_mean': variances_features.mean(),
+                'global_std': variances_features.std(),
+                'quantiles': variances_features.quantile([0.25, 0.5, 0.75])
             }
         }
         

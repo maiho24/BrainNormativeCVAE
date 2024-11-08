@@ -7,7 +7,7 @@ import yaml
 import numpy as np
 
 from ..models.cvae import cVAE
-from ..utils.data import MyDataset_labels
+from ..utils.data import MyDataset
 from ..utils.logger import Logger, plot_losses
 
 logger = logging.getLogger(__name__)

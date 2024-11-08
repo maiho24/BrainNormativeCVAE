@@ -1,4 +1,5 @@
 import argparse
+import torch
 import yaml
 from pathlib import Path
 import sys
@@ -9,10 +10,10 @@ import numpy as np
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.inference.inference import run_inference
-from src.inference.bootstrap import generate_bootstrap_stats_by_covariates
-from src.models.cvae import load_model
-from src.utils.data import load_test_data, process_covariates, setup_logging
+from src.inference.bootstrap import generate_bootstrap_stats_by_covariates, compute_feature_importance, generate_summary_statistics
+from src.models.cvae import cVAE
+from src.utils.data import load_test_data, process_covariates
+from src.utils.logger import setup_logging
 
 def create_parser():
     """Create argument parser with detailed help messages."""
@@ -80,6 +81,12 @@ def create_parser():
     
     return parser
 
+def load_model(model_path):
+    model = torch.load(model_path,
+                  map_location=torch.device('cpu'))
+    model.eval()
+    return model
+    
 def main():
     # Create parser with detailed help
     parser = create_parser()
@@ -118,28 +125,35 @@ def main():
 
         # Load and process test data
         logger.info("Loading and processing test data...")
-        test_data, test_covariates_raw = load_test_data(config['paths']['data_dir'])
-        test_covariates_processed = process_covariates(test_covariates_raw)
-
-        # Run inference with processed covariates
-        logger.info("Computing reconstruction variances...")
-        recon_vars = run_inference(model, test_data, test_covariates_processed, config)
-        np.savetxt(results_dir / 'reconstruction_variances.csv', recon_vars, delimiter=',')
+        test_data, test_covariates_raw, test_covariates_processed = load_test_data(config['paths']['data_dir'], logger)
+        
+        # Extract features' column names
+        feature_cols = test_data.columns.tolist()
 
         # Run bootstrap analysis
         logger.info("Starting bootstrap analysis...")
         bootstrap_results = generate_bootstrap_stats_by_covariates(
             model=model,
-            covariates_df=test_covariates_raw,
+            covariates=test_covariates_processed,
+            feature_cols=feature_cols,
             config=config,
             num_samples=args.num_samples,
             num_bootstraps=args.num_bootstraps
         )
-
-        # Save bootstrap results
-        for filename, df in bootstrap_results.items():
-            df.to_csv(results_dir / filename, index=False)
-
+        
+        # Compute and save feature importance
+        logger.info("Computing feature importance...")
+        feature_variability, covariate_sensitivity = compute_feature_importance(
+            bootstrap_results=bootstrap_results, 
+            covariates_df=test_covariates_raw,
+            feature_cols=feature_cols,
+            config=config
+        )
+        
+        # Generate and save summary statistics
+        logger.info("Generating summary statistics...")
+        summary_stats = generate_summary_statistics(bootstrap_results, feature_cols, config)
+        
         logger.info("Inference and bootstrap analysis completed successfully")
         
     except Exception as e:

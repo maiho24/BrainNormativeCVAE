@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 
 
-class MyDataset_labels(Dataset):
+class MyDataset(Dataset):
     def __init__(self, data, labels, indices=False, transform=None):
         self.data = data
         self.labels = labels
@@ -41,46 +41,75 @@ class MyDataset_labels(Dataset):
         
 def process_covariates(covariates_df):
     """Process covariates into the format needed by the model."""
-    # Continuous variables
-    age_icv = covariates_df[['Age', 'wb_EstimatedTotalIntraCranial_Vol']].values
+    try:
+        # Continuous variables
+        age_icv = covariates_df[['Age', 'wb_EstimatedTotalIntraCranial_Vol']].values
+        
+        # Categorical variables
+        categorical_cols = ['Sex', 'Diabetes Status', 'Smoking Status', 
+                          'Hypercholesterolemia Status', 'Obesity Status']
+        one_hot_encodings = []
+        
+        for col in categorical_cols:
+            if col not in covariates_df.columns:
+                raise KeyError(f"Column '{col}' not found in covariates DataFrame")
+            one_hot = pd.get_dummies(covariates_df[col], prefix=col).values
+            one_hot_encodings.append(one_hot)
+        
+        # Combine all covariates
+        return np.hstack([age_icv] + one_hot_encodings)
+    except KeyError as e:
+        raise KeyError(f"Missing required column: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Error processing covariates: {str(e)}")
     
-    # Categorical variables
-    categorical_cols = ['Sex', 'Diabetes Status', 'Smoking Status', 
-                       'Hypercholesterolemia Status', 'Obesity Status']
-    one_hot_encodings = []
-    
-    for col in categorical_cols:
-        one_hot = pd.get_dummies(covariates_df[col], prefix=col).values
-        one_hot_encodings.append(one_hot)
-    
-    # Combine all covariates
-    return np.hstack([age_icv] + one_hot_encodings)
-
-def load_data(data_path, val_split=0.15):
+def load_train_data(data_path, logger):
     """Load and process training and validation data."""
+    logger.info("Loading training data...")
+    
     # Load raw data
-    train_data = pd.read_csv(f"{data_path}/train_data_subset.csv")
-    train_covariates = pd.read_csv(f"{data_path}/train_covariates_subset.csv")
+    data_path = Path(config['paths']['data_dir'])
+    train_data = pd.read_csv(data_path / 'train_data.csv')
+    train_covariates = pd.read_csv(data_path / 'train_covariates.csv')
+    test_data = pd.read_csv(data_path / 'test_data.csv')
+    test_covariates = pd.read_csv(data_path / 'test_covariates.csv')
     
     # Process covariates
-    processed_covariates = process_covariates(train_covariates)
+    train_covariates_processed = process_covariates(train_covariates)
+    test_covariates_processed = process_covariates(test_covariates)
     
-    # Split into train and validation
-    train_data_np, val_data_np, train_cov_np, val_cov_np = train_test_split(
-        train_data.to_numpy(), 
-        processed_covariates,
-        test_size=val_split,
-        random_state=42
-    )
+    # Convert data to numpy arrays
+    train_data_np = train_data.to_numpy()
+    test_data_np = test_data.to_numpy()
     
-    return train_data_np, train_cov_np, val_data_np, val_cov_np
+    # Split training data into train and validation sets
+    val_size = config['training']['validation_split']
+    indices = np.arange(len(train_data_np))
+    np.random.seed(42)
+    np.random.shuffle(indices)
+    split_idx = int(len(indices) * (1 - val_size))
+    
+    train_indices = indices[:split_idx]
+    val_indices = indices[split_idx:]
+    
+    # Create train and validation sets
+    train_data_split = train_data_np[train_indices]
+    train_cov_split = train_covariates_processed[train_indices]
+    val_data_split = train_data_np[val_indices]
+    val_cov_split = train_covariates_processed[val_indices]
+    
+    return (train_data_split, train_cov_split, 
+            val_data_split, val_cov_split,
+            test_data_np, test_covariates_processed)
 
-def load_test_data(data_path):
+def load_test_data(data_path, logger):
     """Load and process test data."""
-    test_data = pd.read_csv(f"{data_path}/test_data_subset.csv")
-    test_covariates = pd.read_csv(f"{data_path}/test_covariates_subset.csv")
+    logger.info("Loading test data...")
+    
+    test_data = pd.read_csv(f"{data_path}/test_data.csv")
+    test_covariates = pd.read_csv(f"{data_path}/test_covariates.csv")
     
     # Process covariates
     processed_covariates = process_covariates(test_covariates)
     
-    return test_data.to_numpy(), processed_covariates
+    return test_data, test_covariates, processed_covariates

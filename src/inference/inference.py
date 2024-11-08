@@ -30,22 +30,21 @@ def run_inference(model, test_data, test_covariates, config):
     model = model.to(device)
     
     try:
-        # Convert to torch tensors
-        test_data_tensor = torch.FloatTensor(test_data).to(device)
-        test_covariates_tensor = torch.FloatTensor(test_covariates).to(device)
+        # Convert to DataFrame since pred_recon expects DataFrame
+        test_data = pd.DataFrame(test_data)
         
         # Get reconstruction variances
         test_recon_var = get_reconstruction_vars(
             model, 
-            test_data_tensor, 
-            test_covariates_tensor, 
+            test_data, 
+            test_covariates, 
             device
         )
         
         # Save results
-        output_dir = Path(config['paths']['output_dir'])
+        results_dir = Path(config['paths']['output_dir']) / 'results'
         np.savetxt(
-            output_dir / 'test_reconstruction_vars.csv', 
+            results_dir / 'test_reconstruction_vars.csv', 
             test_recon_var, 
             delimiter=','
         )

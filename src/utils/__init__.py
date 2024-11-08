@@ -1,7 +1,7 @@
 from .data import (
-    MyDataset_labels, 
+    MyDataset, 
     process_covariates,
-    load_data,
+    load_train_data,
     load_test_data
 )
 from .logger import (
@@ -11,9 +11,9 @@ from .logger import (
 )
 
 __all__ = [
-    'MyDataset_labels',
+    'MyDataset',
     'process_covariates',
-    'load_data',
+    'load_train_data',
     'load_test_data',
     'Logger',
     'plot_losses',

@@ -4,7 +4,7 @@ import logging
 import yaml
 from pathlib import Path
 
-from ..utils.data import MyDataset_labels
+from ..utils.data import MyDataset
 from ..utils.logger import Logger, plot_losses
 from ..models.cvae import cVAE
 

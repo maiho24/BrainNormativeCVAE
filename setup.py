@@ -16,7 +16,8 @@ def setup_package():
             'scikit-learn==1.3.0',
             'optuna==3.4.0',
             'pyyaml>=6.0.1',
-            'tqdm>=4.65.0'
+            'tqdm>=4.65.0',
+            'openpyxl==3.1.5'
         ],
         description='A library for running cVAE-based normative model',
         long_description="""

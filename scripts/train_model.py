@@ -13,7 +13,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.training.train import train_model
 from src.training.optuna_trainer import OptunaTrainer
 from src.models.cvae import cVAE
-from src.utils.data import MyDataset_labels, process_covariates
+from src.utils.data import MyDataset, process_covariates, load_train_data
 from src.utils.logger import Logger, plot_losses, setup_logging
 
 def create_parser():
@@ -70,45 +70,6 @@ def create_parser():
     
     return parser
 
-def load_and_preprocess_data(config, logger):
-    """Load and preprocess training and validation data."""
-    logger.info("Loading data...")
-    
-    # Load raw data
-    data_path = Path(config['paths']['data_dir'])
-    train_data = pd.read_csv(data_path / 'train_data.csv')
-    train_covariates = pd.read_csv(data_path / 'train_covariates.csv')
-    test_data = pd.read_csv(data_path / 'test_data.csv')
-    test_covariates = pd.read_csv(data_path / 'test_covariates.csv')
-    
-    # Process covariates
-    train_covariates_processed = process_covariates(train_covariates)
-    test_covariates_processed = process_covariates(test_covariates)
-    
-    # Convert data to numpy arrays
-    train_data_np = train_data.to_numpy()
-    test_data_np = test_data.to_numpy()
-    
-    # Split training data into train and validation sets
-    val_size = config['training']['validation_split']
-    indices = np.arange(len(train_data_np))
-    np.random.seed(42)
-    np.random.shuffle(indices)
-    split_idx = int(len(indices) * (1 - val_size))
-    
-    train_indices = indices[:split_idx]
-    val_indices = indices[split_idx:]
-    
-    # Create train and validation sets
-    train_data_split = train_data_np[train_indices]
-    train_cov_split = train_covariates_processed[train_indices]
-    val_data_split = train_data_np[val_indices]
-    val_cov_split = train_covariates_processed[val_indices]
-    
-    return (train_data_split, train_cov_split, 
-            val_data_split, val_cov_split,
-            test_data_np, test_covariates_processed)
-
 def main():
     # Create parser with detailed help
     parser = create_parser()
@@ -149,9 +110,10 @@ def main():
 
     try:
         # Load and preprocess data
+        data_path = Path(config['paths']['data_dir'])
         (train_data, train_covariates, 
          val_data, val_covariates,
-         test_data, test_covariates) = load_and_preprocess_data(config, logger)
+         test_data, test_covariates) = load_train_data(data_path, logger)
 
         # Set device
         device = torch.device("cuda" if args.gpu and torch.cuda.is_available() else "cpu")

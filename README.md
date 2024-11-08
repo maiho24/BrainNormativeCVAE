@@ -149,8 +149,6 @@ output_dir/
 │   └── best_params.yaml                # Best hyperparameters (Optuna mode only)
 │
 └── results/                            # Analysis results directory
-    ├── reconstruction_variances.csv    # Model's reconstruction uncertainty for test data
-    │
     ├── bootstrapped_means.csv          # Mean predictions for each covariate combination
     ├── bootstrapped_variances.csv      # Variance of predictions for each combination
     │
@@ -165,9 +163,6 @@ output_dir/
 ```
 
 ### Results File Descriptions
-
-#### Reconstruction Analysis
-- `reconstruction_variances.csv`: Model's uncertainty in reconstructing test data points, indicating reliability of predictions
 
 #### Bootstrap Analysis Results
 - `bootstrapped_means.csv`: Average predictions for each covariate combination across bootstrap samples
@@ -196,17 +191,18 @@ This implementation extends the normative modelling framework by [Lawry Aguila e
 If you use this package, please cite both our work and the original implementation:
 
 ```bibtex
-@software{brainnormativecvae2024,
+@software{MaiHo_BrainNormativecVAE,
   author = {Ho, M., Song, Y., Sachdev, P., Jiang, J., Wen, W.},
   title = {An Enhanced Conditional Variational Autoencoder-Based Normative Model for Neuroimaging Analysis},
   year = {2024},
   url = {https://github.com/maiho24/BrainNormativeCVAE}
 }
 
-@software{lawryaguila2022normativecvae,
+@software{LawryAguila_normativecVAE,
   author = {Lawry Aguila, A., Chapman, J., Janahi, M., Altmann, A.},
   title = {Conditional VAEs for confound removal and normative modelling of neurodegenerative diseases},
   year = {2022},
-  url = {https://github.com/alawryaguila/normativecVAE}
+  url = {https://github.com/alawryaguila/normativecVAE},
+  note = {Accessed: 2024-11-08}
 }
 ```
