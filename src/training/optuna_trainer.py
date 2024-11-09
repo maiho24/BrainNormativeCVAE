@@ -5,6 +5,12 @@ from pathlib import Path
 import logging
 import yaml
 import numpy as np
+import warnings
+
+warnings.filterwarnings('ignore', 
+    message='Choices for a categorical distribution should be a tuple of None, bool, int, float and str.*',
+    category=UserWarning,
+    module='optuna.distributions')
 
 from ..models.cvae import cVAE
 from ..utils.data import MyDataset
@@ -32,13 +38,7 @@ class OptunaTrainer:
         self.device = torch.device("cuda" if config['device']['gpu'] and torch.cuda.is_available() else "cpu")
         
         # Set up Optuna study
-        self.study = optuna.create_study(
-            study_name=config['optuna']['study_name'],
-            storage=config['paths']['study_storage'],
-            load_if_exists=True,
-            direction="minimize",
-            pruner=optuna.pruners.MedianPruner()
-        )
+        self.study = optuna.create_study(direction="minimize")
 
     def create_model(self, trial):
         """Create model with parameters suggested by Optuna."""
@@ -47,9 +47,10 @@ class OptunaTrainer:
             self.config['optuna']['search_space']['hidden_dim']['choices'])
         latent_dim = trial.suggest_categorical('latent_dim', 
             self.config['optuna']['search_space']['latent_dim']['choices'])
-        learning_rate = trial.suggest_loguniform('learning_rate',
-            self.config['optuna']['search_space']['learning_rate']['min'],
-            self.config['optuna']['search_space']['learning_rate']['max'])
+        learning_rate = trial.suggest_float('learning_rate',
+            float(self.config['optuna']['search_space']['learning_rate']['min']),
+            float(self.config['optuna']['search_space']['learning_rate']['max']),
+            log=True)
         batch_size = trial.suggest_categorical('batch_size',
             self.config['optuna']['search_space']['batch_size']['choices'])
         beta = trial.suggest_categorical('beta',
@@ -74,8 +75,8 @@ class OptunaTrainer:
         model = model.to(self.device)
 
         # Create data loaders
-        train_dataset = MyDataset_labels(self.train_data, self.train_covariates)
-        val_dataset = MyDataset_labels(self.val_data, self.val_covariates)
+        train_dataset = MyDataset(self.train_data, self.train_covariates)
+        val_dataset = MyDataset(self.val_data, self.val_covariates)
         
         train_loader = data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False)

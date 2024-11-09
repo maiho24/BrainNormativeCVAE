@@ -1,19 +1,7 @@
 import argparse
-import torch
+import sys
 import yaml
 from pathlib import Path
-import sys
-import logging
-from datetime import datetime
-import pandas as pd
-import numpy as np
-
-sys.path.append(str(Path(__file__).parent.parent))
-
-from src.inference.bootstrap import generate_bootstrap_stats_by_covariates, compute_feature_importance, generate_summary_statistics
-from src.models.cvae import cVAE
-from src.utils.data import load_test_data, process_covariates
-from src.utils.logger import setup_logging
 
 def create_parser():
     """Create argument parser with detailed help messages."""
@@ -80,34 +68,23 @@ def create_parser():
     )
     
     return parser
-
-def load_model(model_path):
-    model = torch.load(model_path,
-                  map_location=torch.device('cpu'))
-    model.eval()
-    return model
     
-def main():
-    # Create parser with detailed help
-    parser = create_parser()
+def run_inference(args, config):
+    """Separate function containing all inference-related code and imports."""
+    import torch
+    import logging
+    import pandas as pd
+    import numpy as np
+    from datetime import datetime
     
-    # Show help if no arguments provided
-    if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
-        
-    args = parser.parse_args()
-
-    # Load configuration
-    with open(args.config, 'r') as f:
-        config = yaml.safe_load(f)
-
-    # Override config with command line arguments
-    if args.data_dir:
-        config['paths']['data_dir'] = args.data_dir
-    if args.output_dir:
-        config['paths']['output_dir'] = args.output_dir
-    config['device']['gpu'] = args.gpu
+    # Add project root to path
+    sys.path.append(str(Path(__file__).parent.parent))
+    
+    # Import project-specific modules
+    from src.inference.bootstrap import generate_bootstrap_stats_by_covariates, compute_feature_importance, generate_summary_statistics
+    from src.models.cvae import cVAE
+    from src.utils.data import load_test_data, process_covariates
+    from src.utils.logger import setup_logging
 
     # Create output directory structure
     output_dir = Path(config['paths']['output_dir'])
@@ -121,7 +98,8 @@ def main():
     try:
         # Load model
         logger.info("Loading model...")
-        model = load_model(args.model_path)
+        model = torch.load(args.model_path, map_location=torch.device('cpu'))
+        model.eval()
 
         # Load and process test data
         logger.info("Loading and processing test data...")
@@ -135,6 +113,7 @@ def main():
         bootstrap_results = generate_bootstrap_stats_by_covariates(
             model=model,
             covariates=test_covariates_processed,
+            covariates_df=test_covariates_raw,
             feature_cols=feature_cols,
             config=config,
             num_samples=args.num_samples,
@@ -159,6 +138,33 @@ def main():
     except Exception as e:
         logger.error(f"Error during inference: {str(e)}")
         raise
+    
+def main():
+    # Create parser with detailed help
+    parser = create_parser()
+    
+    # Show help if no arguments provided
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+        
+    args = parser.parse_args()
+
+    # Only import yaml when actually loading config
+    if len(sys.argv) > 1 and not (len(sys.argv) == 2 and sys.argv[1] in ['-h', '--help']):
+        # Load configuration
+        with open(args.config, 'r') as f:
+            config = yaml.safe_load(f)
+
+        # Override config with command line arguments
+        if args.data_dir:
+            config['paths']['data_dir'] = args.data_dir
+        if args.output_dir:
+            config['paths']['output_dir'] = args.output_dir
+        config['device']['gpu'] = args.gpu
+
+        # Run the actual inference
+        run_inference(args, config)
 
 if __name__ == '__main__':
     main()

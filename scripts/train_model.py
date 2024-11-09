@@ -2,19 +2,6 @@ import argparse
 import yaml
 from pathlib import Path
 import sys
-import logging
-from datetime import datetime
-import torch
-import pandas as pd
-import numpy as np
-
-sys.path.append(str(Path(__file__).parent.parent))
-
-from src.training.train import train_model
-from src.training.optuna_trainer import OptunaTrainer
-from src.models.cvae import cVAE
-from src.utils.data import MyDataset, process_covariates, load_train_data
-from src.utils.logger import Logger, plot_losses, setup_logging
 
 def create_parser():
     """Create argument parser with detailed help messages."""
@@ -70,27 +57,24 @@ def create_parser():
     
     return parser
 
-def main():
-    # Create parser with detailed help
-    parser = create_parser()
+def run_training(args, config):
+    """Separate function containing all training-related code and imports."""
+    # Import heavy libraries only when needed
+    import logging
+    import torch
+    import pandas as pd
+    import numpy as np
+    from datetime import datetime
     
-    # Show help if no arguments provided
-    if len(sys.argv) == 1:
-        parser.print_help(sys.stderr)
-        sys.exit(1)
-        
-    args = parser.parse_args()
-
-    # Load configuration
-    with open(args.config, 'r') as f:
-        config = yaml.safe_load(f)
-
-    # Override config with command line arguments
-    if args.data_dir:
-        config['paths']['data_dir'] = args.data_dir
-    if args.output_dir:
-        config['paths']['output_dir'] = args.output_dir
-    config['device']['gpu'] = args.gpu
+    # Add project root to path
+    sys.path.append(str(Path(__file__).parent.parent))
+    
+    # Import project-specific modules
+    from src.training.train import train_model
+    from src.training.optuna_trainer import OptunaTrainer
+    from src.models.cvae import cVAE
+    from src.utils.data import MyDataset, process_covariates, load_train_data
+    from src.utils.logger import Logger, plot_losses, setup_logging
 
     # Create output directories
     output_dir = Path(config['paths']['output_dir'])
@@ -111,9 +95,10 @@ def main():
     try:
         # Load and preprocess data
         data_path = Path(config['paths']['data_dir'])
+        val_size = config['training']['validation_split']
         (train_data, train_covariates, 
          val_data, val_covariates,
-         test_data, test_covariates) = load_train_data(data_path, logger)
+         test_data, test_covariates) = load_train_data(data_path, val_size, logger)
 
         # Set device
         device = torch.device("cuda" if args.gpu and torch.cuda.is_available() else "cpu")
@@ -149,6 +134,33 @@ def main():
     except Exception as e:
         logger.error(f"Training failed: {str(e)}")
         raise
+        
+def main():
+    # Create parser with detailed help
+    parser = create_parser()
+    
+    # Show help if no arguments provided
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        sys.exit(1)
+        
+    args = parser.parse_args()
+
+    # Only import yaml when actually loading config
+    if len(sys.argv) > 1 and not (len(sys.argv) == 2 and sys.argv[1] in ['-h', '--help']):
+        # Load configuration
+        with open(args.config, 'r') as f:
+            config = yaml.safe_load(f)
+
+        # Override config with command line arguments
+        if args.data_dir:
+            config['paths']['data_dir'] = args.data_dir
+        if args.output_dir:
+            config['paths']['output_dir'] = args.output_dir
+        config['device']['gpu'] = args.gpu
+
+        # Run the actual training
+        run_training(args, config)
 
 if __name__ == '__main__':
     main()

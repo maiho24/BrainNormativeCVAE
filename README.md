@@ -12,6 +12,8 @@ BrainNormativeCVAE is a comprehensive toolkit for building and applying normativ
 
 ## Installation
 
+Using Conda helps manage dependencies and ensures compatibility across different systems. We recommend using [Miniconda](https://docs.conda.io/en/latest/miniconda.html) to keep your environment lightweight.
+
 1. Create and activate a new conda environment:
 ```bash
 conda create -n brain_cvae python=3.9
@@ -23,7 +25,7 @@ git clone https://github.com/maiho24/BrainNormativeCVAE.git
 cd BrainNormativeCVAE
 pip install -e .
 ```
-Note: Make sure to always activate the environment before using the package:
+**Note**: Make sure to always activate the environment before using the package:
 ```bash
 conda activate brain_cvae
 ```

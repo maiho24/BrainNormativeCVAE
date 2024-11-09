@@ -6,13 +6,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def generate_bootstrap_stats_by_covariates(model, covariates, feature_cols, config, num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
+def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, feature_cols, config, num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
     """
     Generate bootstrap statistics for different covariate combinations.
     
     Args:
         model: Trained cVAE model
         covariates: Processed covariates
+        covariates_df: Raw covariates (Pandas Dataframe)
         config: Configuration dictionary
         num_samples: Number of samples per covariate combination
         num_bootstraps: Number of bootstrap iterations
@@ -97,7 +98,6 @@ def generate_bootstrap_stats_by_covariates(model, covariates, feature_cols, conf
         ci_means_upper_results = pd.DataFrame([ci[1] for ci in ci_means_array], columns=feature_cols)
         ci_variances_lower_results = pd.DataFrame([ci[0] for ci in ci_variances_array], columns=feature_cols)
         ci_variances_upper_results = pd.DataFrame([ci[1] for ci in ci_variances_array], columns=feature_cols)
-        covariates_df = pd.DataFrame(covariates)
         
         # Combine results with original covariates
         bootstrap_means_df = pd.concat([covariates_df, bootstrap_means_results], axis=1)

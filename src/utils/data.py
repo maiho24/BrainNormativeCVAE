@@ -63,12 +63,11 @@ def process_covariates(covariates_df):
     except Exception as e:
         raise Exception(f"Error processing covariates: {str(e)}")
     
-def load_train_data(data_path, logger):
+def load_train_data(data_path, val_size, logger):
     """Load and process training and validation data."""
     logger.info("Loading training data...")
     
     # Load raw data
-    data_path = Path(config['paths']['data_dir'])
     train_data = pd.read_csv(data_path / 'train_data.csv')
     train_covariates = pd.read_csv(data_path / 'train_covariates.csv')
     test_data = pd.read_csv(data_path / 'test_data.csv')
@@ -83,7 +82,6 @@ def load_train_data(data_path, logger):
     test_data_np = test_data.to_numpy()
     
     # Split training data into train and validation sets
-    val_size = config['training']['validation_split']
     indices = np.arange(len(train_data_np))
     np.random.seed(42)
     np.random.shuffle(indices)
