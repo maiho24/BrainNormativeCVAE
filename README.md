@@ -42,14 +42,12 @@ brain-cvae-train --help
 brain-cvae-train \
     --config configs/default_config.yaml \
     --mode direct \
-    --output_dir path/to/output \
     --gpu
 
 # Hyperparameter optimization with Optuna
 brain-cvae-train \
     --config configs/default_config.yaml \
     --mode optuna \
-    --output_dir path/to/output \
     --gpu
 ```
 
@@ -63,10 +61,8 @@ brain-cvae-inference --help
 brain-cvae-inference \
     --model_path path/to/output/models/final_model.pkl \
     --config configs/default_config.yaml \
-    --output_dir path/to/output \
     --num_samples 1000 \
     --num_bootstraps 1000 \
-    --gpu
 ```
 
 ## Data Format
@@ -87,37 +83,40 @@ The following covariates are expected for the current implementation:
 - Hypercholesterolemia Status (categorical)
 - Obesity Status (categorical)
 
-To apply the package to other covariates, modifications are required in the process_covariates() function located in utils/data.py.
+To apply the package to other covariates, modifications are required in the `process_covariates()` function located in `utils/data.py`.
 
 ## Configuration
 
 Create a YAML configuration file with the following structure:
 
 ```yaml
-model:
-  input_dim: 56  # Replace with your actual input dimension
+training:
+  mode: "direct"  # Options: "direct" for fixed parameters or "optuna" for hyperparameter tuning
+  epochs: 200
+  batch_size: 64
+  early_stopping_patience: 20
+  validation_split: 0.15
+  
+model: # Fixed model parameters for "direct" training mode
   hidden_dim: [128]  # Architecture of hidden layers, e.g., [128, 64] means two hidden layers with 128 and 64 neurons
   latent_dim: 32
   non_linear: true
   beta: 1.0
   learning_rate: 0.001
 
-training:
-  mode: "direct"  # or "optuna"
-  epochs: 200
-  batch_size: 64
-  early_stopping_patience: 20
-  validation_split: 0.15
-
-optuna: # Optional, for hyperparameter optimization
+optuna: # Configuration for "optuna" hyperparameter optimization mode
   n_trials: 100
+  non_linear: true
   study_name: "cvae_optimization"
   search_space:
     hidden_dim:
+      type: "categorical"
       choices: [[32], [64], [128]]
     latent_dim:
-      choices: [8, 16, 32]
+      type: "categorical"
+      choices: [16, 32]
     learning_rate:
+      type: "loguniform"
       min: 1e-5
       max: 1e-3
     batch_size:
