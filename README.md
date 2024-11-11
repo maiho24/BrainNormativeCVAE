@@ -192,7 +192,7 @@ This implementation extends the normative modelling framework by [Lawry Aguila e
 If you use this package, please cite both our work and the original implementation:
 
 ```bibtex
-@software{MaiHo_BrainNormativecVAE,
+@software{Ho_BrainNormativecVAE,
   author = {Ho, M., Song, Y., Sachdev, P., Jiang, J., Wen, W.},
   title = {An Enhanced Conditional Variational Autoencoder-Based Normative Model for Neuroimaging Analysis},
   year = {2024},
@@ -204,6 +204,5 @@ If you use this package, please cite both our work and the original implementati
   title = {Conditional VAEs for confound removal and normative modelling of neurodegenerative diseases},
   year = {2022},
   url = {https://github.com/alawryaguila/normativecVAE},
-  note = {Accessed: 2024-11-08}
 }
 ```
