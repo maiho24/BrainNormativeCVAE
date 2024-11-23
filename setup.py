@@ -11,13 +11,13 @@ def setup_package():
             'matplotlib==3.5.3',
             'numpy==1.23.2',
             'torch==1.12.1',
-            'setuptools==59.5.0',
             'pandas==1.4.3',
             'scikit-learn==1.3.0',
             'optuna==3.4.0',
             'pyyaml>=6.0.1',
             'tqdm>=4.65.0',
-            'openpyxl==3.1.5'
+            'setuptools>=64.0.0',
+            'openpyxl>=3.1.5'
         ],
         description='A library for running cVAE-based normative model',
         long_description="""
