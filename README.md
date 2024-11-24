@@ -5,10 +5,10 @@ A Python package for normative modeling of brain imaging data using conditional 
 ## Overview
 
 BrainNormativeCVAE is a comprehensive toolkit for building and applying normative models to neuroimaging data. It implements a conditional Variational Autoencoder approach that can:
-- Learn normative patterns in brain imaging data
-- Account for multiple demographic and clinical covariates
-- Generate statistical estimates of deviation from normative patterns
-- Perform bootstrap analysis for robust statistical inference
+- Learn normative patterns from brain imaging data.
+- Incorporate multiple demographic and clinical covariates.
+- Generate probabilistic estimates (means and standard deviations) for input covariates.
+- Perform robust statistical inference using bootstrap analysis.
 
 ## Installation
 
@@ -90,23 +90,22 @@ To apply the package to other covariates, modifications are required in the `pro
 Create a YAML configuration file with the following structure:
 
 ```yaml
+model:
+  hidden_dim: [128]  # Architecture of hidden layers, e.g., [128, 64] means two hidden layers with 128 and 64 neurons
+  latent_dim: 32  # Required if "direct" mode is used
+  non_linear: true
+  beta: 1.0  # Required if "direct" mode is used
+  learning_rate: 0.001  # Required if "direct" mode is used
+
 training:
-  mode: "direct"  # Options: "direct" for fixed parameters or "optuna" for hyperparameter tuning
+  mode: "direct"  # Options: "direct" or "optuna"
   epochs: 200
   batch_size: 64
   early_stopping_patience: 20
   validation_split: 0.15
-  
-model: # Fixed model parameters for "direct" training mode
-  hidden_dim: [128]  # Architecture of hidden layers, e.g., [128, 64] means two hidden layers with 128 and 64 neurons
-  latent_dim: 32
-  non_linear: true
-  beta: 1.0
-  learning_rate: 0.001
 
-optuna: # Configuration for "optuna" hyperparameter optimization mode
+optuna: # Optional
   n_trials: 100
-  non_linear: true
   study_name: "cvae_optimization"
   search_space:
     hidden_dim:
@@ -125,13 +124,13 @@ optuna: # Configuration for "optuna" hyperparameter optimization mode
     beta:
       type: "categorical"
       choices: [0.75, 1.0]
-      
+
 paths:
   data_dir: "path/to/data/"
   output_dir: "path/to/output/"
 
 device:
-  gpu: false  # Set to true to use GPU if available
+  gpu: true
 ```
 
 ## Output Directory Structure
