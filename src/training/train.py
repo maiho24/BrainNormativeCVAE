@@ -39,8 +39,8 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
     logger.info(f"Using device: {device}")
 
     # Create datasets and dataloaders
-    train_dataset = MyDataset_labels(train_data, train_covariates)
-    val_dataset = MyDataset_labels(val_data, val_covariates)
+    train_dataset = MyDataset(train_data, train_covariates)
+    val_dataset = MyDataset(val_data, val_covariates)
     
     train_loader = data.DataLoader(
         train_dataset,
@@ -55,7 +55,7 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
 
     # Initialize model
     model = cVAE(
-        input_dim=config['model']['input_dim'],
+        input_dim=train_data.shape[1],
         hidden_dim=config['model']['hidden_dim'],
         latent_dim=config['model']['latent_dim'],
         c_dim=train_covariates.shape[1],
@@ -76,12 +76,6 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
     # Save paths
     models_dir = Path(config['paths']['model_dir'])
     models_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save config in models directory
-    config_path = models_dir / 'config.yaml'
-    with open(config_path, 'w') as f:
-        yaml.dump(config, f)
-    logger.info(f"Saved configuration to {config_path}")
 
     # Training loop
     for epoch in range(config['training']['epochs']):

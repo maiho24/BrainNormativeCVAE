@@ -1,10 +1,9 @@
 model:
-  input_dim: 56  # Replace with your actual input dimension
   hidden_dim: [128]  # Architecture of hidden layers, e.g., [128, 64] means two hidden layers with 128 and 64 neurons
-  latent_dim: 32
+  latent_dim: 32  # Required if "direct" mode is used
   non_linear: true
-  beta: 1.0
-  learning_rate: 0.001
+  beta: 1.0  # Required if "direct" mode is used
+  learning_rate: 0.001  # Required if "direct" mode is used
 
 training:
   mode: "direct"  # Options: "direct" or "optuna"

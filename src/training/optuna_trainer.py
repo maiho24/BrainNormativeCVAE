@@ -15,6 +15,7 @@ warnings.filterwarnings('ignore',
 from ..models.cvae import cVAE
 from ..utils.data import MyDataset
 from ..utils.logger import Logger, plot_losses
+from .train import train_model
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class OptunaTrainer:
         self.val_data = val_data
         self.val_covariates = val_covariates
         self.config = config
+        self.best_trial_logger = None
         self.device = torch.device("cuda" if config['device']['gpu'] and torch.cuda.is_available() else "cpu")
         
         # Set up Optuna study
@@ -58,7 +60,7 @@ class OptunaTrainer:
         
         # Create model with suggested parameters
         model = cVAE(
-            input_dim=self.config['model']['input_dim'],
+            input_dim=self.train_data.shape[1],
             hidden_dim=hidden_dim,
             latent_dim=latent_dim,
             c_dim=self.train_covariates.shape[1],
@@ -141,6 +143,7 @@ class OptunaTrainer:
             if current_val_loss < best_val_loss:
                 best_val_loss = current_val_loss
                 patience_counter = 0
+                self.best_trial_logger = logger_trial
             else:
                 patience_counter += 1
                 if patience_counter >= self.config['training']['early_stopping_patience']:
@@ -174,19 +177,38 @@ class OptunaTrainer:
                 logger.info(f"\t{key}: {value}")
             
             # Save best parameters
-            with open(self.models_dir / 'best_params.yaml', 'w') as f:
+            model_dir = Path(self.config['paths']['model_dir'])
+            with open(model_dir / 'best_params.yaml', 'w') as f:
                 yaml.dump(best_params, f)
-            logger.info(f"Saved best parameters to {self.models_dir / 'best_params.yaml'}")
-            
-            # Train final model with best parameters
-            trial = optuna.trial.FixedTrial(best_params)
-            final_model, _ = self.create_model(trial)
-            final_model = final_model.to(self.device)
-            
-            # Save study statistics in models directory
+                
+            # Save study statistics
             df_study = self.study.trials_dataframe()
-            df_study.to_csv(self.models_dir / 'optuna_study_results.csv', index=False)
-            logger.info(f"Saved study results to {self.models_dir / 'optuna_study_results.csv'}")
+            df_study.to_csv(model_dir / 'optuna_study_results.csv', index=False)
+            
+            # Plot and save training curves for best trial
+            if self.best_trial_logger is not None:
+                plot_losses(self.best_trial_logger, model_dir, '_best_trial')
+                logger.info(f"Saved loss plots for best trial to {model_dir}")
+            
+            # Create training config with best parameters
+            train_config = self.config.copy()
+            train_config['model'].update({
+                'hidden_dim': best_params['hidden_dim'],
+                'latent_dim': best_params['latent_dim'],
+                'learning_rate': best_params['learning_rate'],
+                'beta': best_params['beta']
+            })
+            train_config['training']['batch_size'] = best_params['batch_size']
+            
+            # Retrain model with best parameters
+            logger.info("Retraining model with best parameters...")
+            final_model = train_model(
+                self.train_data,
+                self.train_covariates,
+                self.val_data,
+                self.val_covariates,
+                train_config
+            )
             
             return final_model, best_params
             
