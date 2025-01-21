@@ -16,7 +16,7 @@ Using Conda helps manage dependencies and ensures compatibility across different
 
 1. Create and activate a new conda environment:
 ```bash
-conda create -n brain_cvae python=3.9
+conda create -n brain_cvae
 conda activate brain_cvae
 ```
 2. Clone and install the package:
@@ -186,7 +186,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## Attribution
 
-This implementation extends the normative modelling framework by [Lawry Aguila et al. (2022)](https://github.com/alawryaguila/normativecVAE), with refinements in both the model architecture and inference approach.
+This implementation extends the normative modelling framework by [Lawry Aguila et al. (2022)](https://github.com/alawryaguila/normativecVAE), with substantial refinements in both the model architecture and inference approach.
 
 If you use this package, please cite both our work and the original implementation:
 
@@ -194,7 +194,7 @@ If you use this package, please cite both our work and the original implementati
 @software{Ho_BrainNormativecVAE,
   author = {Ho, M., Song, Y., Sachdev, P., Jiang, J., Wen, W.},
   title = {An Enhanced Conditional Variational Autoencoder-Based Normative Model for Neuroimaging Analysis},
-  year = {2024},
+  year = {2025},
   url = {https://github.com/maiho24/BrainNormativeCVAE}
 }
 
