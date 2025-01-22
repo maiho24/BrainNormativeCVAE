@@ -1,18 +1,15 @@
 """
-Bootstrap Training Implementation for AAE
-
-This module implements the bootstrap training procedure for the Adversarial Autoencoder (AAE).
+Bootstrap Training Implementation for CAAE with proper logging
 """
 
 import torch
 import numpy as np
 from pathlib import Path
 import logging
-from torch.utils.data import DataLoader, Dataset
-from sklearn.preprocessing import RobustScaler
-import pandas as pd
+from torch.utils.data import DataLoader
 from ..models.aae import AAE
-from ..utils.data import process_covariates, MyDataset
+from ..utils.data import MyDataset
+from ..utils.logger import Logger, plot_losses, plot_losses_aae
 
 logger = logging.getLogger(__name__)
 
@@ -27,23 +24,25 @@ class BootstrapAAETrainer:
         """Create a bootstrap sample with replacement."""
         n_samples = len(data)
         indices = np.random.choice(n_samples, size=n_samples, replace=True)
-        return data[indices], covariates.iloc[indices] if isinstance(covariates, pd.DataFrame) else covariates[indices]
+        return data[indices], covariates[indices]
         
     def train_bootstrap_models(self, data, covariates, output_dir):
         """Train multiple AAE models using bootstrap samples."""
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Process covariates once for all bootstrap iterations
-        processed_covariates = process_covariates(covariates)
-        condition_dim = processed_covariates.shape[1]
+        condition_dim = covariates.shape[1]
         
         for i in range(self.n_bootstrap):
             logger.info(f"Training bootstrap model {i+1}/{self.n_bootstrap}")
             
+            # Create loss logger for this bootstrap model
+            loss_logger = Logger()
+            loss_keys = ['total_loss', 'reconstruction', 'discriminator', 'generator']
+            loss_logger.on_train_init(loss_keys)
+            
             # Create bootstrap sample
-            boot_data, boot_covariates = self.create_bootstrap_sample(
-                data, processed_covariates)
+            boot_data, boot_covariates = self.create_bootstrap_sample(data, covariates)
             
             # Initialize model
             model = AAE(
@@ -64,15 +63,17 @@ class BootstrapAAETrainer:
             )
             
             # Training loop with cyclical learning rate
-            self.train_single_model(model, loader, i, output_dir)
+            self.train_single_model(model, loader, i, output_dir, loss_logger)
             
             # Save model
-            model_dir = output_dir / f"bootstrap_{i:03d}"
+            model_dir = output_dir / f"bootstrap_{i+1}"
             model_dir.mkdir(exist_ok=True)
             
+            # Save model and plot losses
             torch.save(model.state_dict(), model_dir / "model.pt")
+            plot_losses_aae(loss_logger, model_dir, title=f'_bootstrap_{i+1}')
             
-    def train_single_model(self, model, loader, bootstrap_idx, output_dir):
+    def train_single_model(self, model, loader, bootstrap_idx, output_dir, loss_logger):
         """Train a single AAE model with cyclical learning rate."""
         n_samples = len(loader.dataset)
         step_size = 2 * np.ceil(n_samples / self.config['training']['batch_size'])
@@ -110,13 +111,18 @@ class BootstrapAAETrainer:
                 for k, v in losses.items():
                     epoch_losses[k] += v.item()
             
+            # Calculate average losses for the epoch
+            avg_losses = {k: v/len(loader) for k, v in epoch_losses.items()}
+            
+            # Log losses
+            loss_logger.on_train_step(avg_losses)
+            
             # Log progress
             if (epoch + 1) % 10 == 0:
-                losses_avg = {k: v/len(loader) for k, v in epoch_losses.items()}
                 logger.info(
                     f"Bootstrap {bootstrap_idx+1}, Epoch {epoch+1}: "
-                    f"Total={losses_avg['total_loss']:.4f}, "
-                    f"Recon={losses_avg['reconstruction']:.4f}, "
-                    f"Disc={losses_avg['discriminator']:.4f}, "
-                    f"Gen={losses_avg['generator']:.4f}"
+                    f"Total={avg_losses['total_loss']:.4f}, "
+                    f"Recon={avg_losses['reconstruction']:.4f}, "
+                    f"Disc={avg_losses['discriminator']:.4f}, "
+                    f"Gen={avg_losses['generator']:.4f}"
                 )

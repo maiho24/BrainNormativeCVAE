@@ -3,7 +3,7 @@ import os
 
 def setup_package():
     data = dict(
-        name='BrainNormativeCVAE',
+        name='BrainNormativeAAE',
         version='0.1.0',
         packages=find_packages(),
         install_requires=[

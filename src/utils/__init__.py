@@ -7,6 +7,7 @@ from .data import (
 from .logger import (
     Logger,
     plot_losses,
+    plot_losses_aae,
     setup_logging
 )
 

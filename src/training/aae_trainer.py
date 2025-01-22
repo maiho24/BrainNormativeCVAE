@@ -1,7 +1,5 @@
 """
-AAE Training Implementation
-
-This module implements the direct training procedure for the Adversarial Autoencoder (AAE).
+CAAE Training Implementation with proper logging
 """
 
 import torch
@@ -10,8 +8,8 @@ from pathlib import Path
 import logging
 from torch.utils.data import DataLoader
 from ..models.aae import AAE
-from ..utils.data import MyDataset, process_covariates
-from ..utils.logger import Logger
+from ..utils.data import MyDataset
+from ..utils.logger import Logger, plot_losses_aae
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +18,7 @@ class AAETrainer:
         self.config = config
         self.device = torch.device("cuda" if config['device']['gpu'] and 
                                  torch.cuda.is_available() else "cpu")
-        self.logger = Logger()
+        self.loss_logger = Logger()
         
     def setup_model(self, input_dim, condition_dim):
         """Initialize the AAE model with configured parameters."""
@@ -34,14 +32,10 @@ class AAETrainer:
         ).to(self.device)
 
     def train_model(self, train_data, train_covariates, val_data, val_covariates):
-        """Train the AAE model using processed covariates."""
-        # Process covariates
-        train_covariates_processed = process_covariates(train_covariates)
-        val_covariates_processed = process_covariates(val_covariates)
-        
+        """Train the AAE model using processed data."""
         # Initialize datasets and dataloaders
-        train_dataset = MyDataset(train_data, train_covariates_processed)
-        val_dataset = MyDataset(val_data, val_covariates_processed)
+        train_dataset = MyDataset(train_data, train_covariates)
+        val_dataset = MyDataset(val_data, val_covariates)
         
         train_loader = DataLoader(
             train_dataset,
@@ -54,11 +48,16 @@ class AAETrainer:
             shuffle=False
         )
 
-        # Initialize model with correct condition dimension
+        # Initialize model
         model = self.setup_model(
             input_dim=train_data.shape[1],
-            condition_dim=train_covariates_processed.shape[1]
+            condition_dim=train_covariates.shape[1]
         )
+
+        # Initialize logger
+        loss_keys = ['total_loss', 'reconstruction', 'discriminator', 'generator']
+        self.loss_logger.on_train_init(loss_keys)
+        self.loss_logger.on_val_init(loss_keys)
 
         # Training loop
         best_val_loss = float('inf')
@@ -74,8 +73,8 @@ class AAETrainer:
             val_losses = self._validate(model, val_loader)
             
             # Logging
-            self.logger.on_train_step(train_losses)
-            self.logger.on_val_step(val_losses)
+            self.loss_logger.on_train_step(train_losses)
+            self.loss_logger.on_val_step(val_losses)
             
             # Early stopping check
             if val_losses['total_loss'] < best_val_loss:
@@ -95,6 +94,8 @@ class AAETrainer:
                        f"Train Loss = {train_losses['total_loss']:.4f}, "
                        f"Val Loss = {val_losses['total_loss']:.4f}")
                        
+        # Plot losses at the end of training
+        plot_losses_aae(self.loss_logger, self.config['paths']['model_dir'], title='_direct_training')
         return model
 
     def _train_epoch(self, model, train_loader, epoch, base_lr, max_lr, gamma):

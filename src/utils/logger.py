@@ -51,6 +51,24 @@ def plot_losses(logger, path, title=''):
     plt.savefig(save_path)
     plt.close()
     
+def plot_losses_aae(logger, path, title=''):
+    """Plot training and validation losses."""
+    plt.figure(figsize=(10, 6))
+
+    # Plot Training Losses
+    plt.subplot(1, 2, 1)
+    plt.title('Training Loss Values')
+    for k, v in logger.logs.items():
+        plt.plot(v, label=str(k))
+    plt.xlabel('Epochs', fontsize=10)
+    plt.ylabel('Loss', fontsize=10)
+    plt.legend()
+
+    plt.tight_layout()
+    save_path = Path(path) / f"Losses{title}.png"
+    plt.savefig(save_path)
+    plt.close()
+    
 def setup_logging(output_dir, script_name):
     """Set up logging with timestamp in filename."""
     # Create logs directory

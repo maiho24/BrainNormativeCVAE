@@ -1,10 +1,10 @@
 # BrainNormativeCVAE
 
-A Python package for normative modeling of brain imaging data using conditional Variational Autoencoders (cVAE).
+A Python package for normative modeling of brain imaging data using conditional Adversarial Autoencoder (cAAE).
 
 ## Overview
 
-BrainNormativeCVAE is a comprehensive toolkit for building and applying normative models to neuroimaging data. It implements a conditional Variational Autoencoder approach that can:
+BrainNormativeCVAE is a comprehensive toolkit for building and applying normative models to neuroimaging data. It implements a conditional Adversarial Autoencoder approach that can:
 - Learn normative patterns from brain imaging data.
 - Incorporate multiple demographic and clinical covariates.
 - Generate probabilistic estimates (means and standard deviations) for input covariates.
@@ -16,18 +16,19 @@ Using Conda helps manage dependencies and ensures compatibility across different
 
 1. Create and activate a new conda environment:
 ```bash
-conda create -n brain_cvae
-conda activate brain_cvae
+conda create -n brain_caae python=3.9
+conda activate brain_caae
 ```
 2. Clone and install the package:
 ```bash
 git clone https://github.com/maiho24/BrainNormativeCVAE.git
+git checkout BrainNormativeAAE
 cd BrainNormativeCVAE
 pip install -e .
 ```
 **Note**: Make sure to always activate the environment before using the package:
 ```bash
-conda activate brain_cvae
+conda activate brain_caae
 ```
 
 ## Quick Start
@@ -36,7 +37,7 @@ conda activate brain_cvae
 
 ```bash
 # Show help message and available options
-brain-cvae-train --help
+brain-aae-train --help
 
 # Direct training with specified parameters
 brain-cvae-train \

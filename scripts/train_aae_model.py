@@ -1,20 +1,11 @@
 #!/usr/bin/env python3
 """
-Script to train the Adversarial Autoencoder (AAE) model.
+Script to train the Conditional Adversarial Autoencoder (CAAE) model.
 Supports both direct training and bootstrap training modes.
 """
 
 import argparse
-import yaml
-from pathlib import Path
 import sys
-import logging
-import torch
-import numpy as np
-import random
-import pandas as pd
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 def create_parser():
     """Create argument parser with detailed help messages."""
@@ -82,6 +73,13 @@ def set_random_seeds(seed):
 def run_training(args, config):
     """Execute the training process based on the specified mode."""
     # Import project modules
+    import yaml
+    from pathlib import Path
+    import logging
+    import torch
+    import numpy as np
+    import random
+    import pandas as pd
     sys.path.append(str(Path(__file__).parent.parent))
     from src.training.aae_trainer import AAETrainer
     from src.training.bootstrap_aae_trainer import BootstrapAAETrainer

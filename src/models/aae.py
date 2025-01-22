@@ -1,5 +1,5 @@
 """
-Adversarial Autoencoder (AAE) Implementation
+Conditional Adversarial Autoencoder (CAAE) Implementation
 """
 
 import torch
