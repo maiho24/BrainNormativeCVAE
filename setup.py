@@ -34,6 +34,7 @@ def setup_package():
             'console_scripts': [
                 'brain-cvae-train=scripts.train_model:main',
                 'brain-cvae-inference=scripts.run_inference:main',
+                'brain-aae-train=scripts.train_aae_model:main'
             ],
         },
         project_urls={
