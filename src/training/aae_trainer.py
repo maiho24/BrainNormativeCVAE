@@ -1,5 +1,5 @@
 """
-CAAE Training Implementation with proper logging
+AAE Training Implementation with proper logging
 """
 
 import torch
@@ -9,7 +9,7 @@ import logging
 from torch.utils.data import DataLoader
 from ..models.aae import AAE
 from ..utils.data import MyDataset
-from ..utils.logger import Logger, plot_losses_aae
+from ..utils.logger import Logger, plot_losses
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ class AAETrainer:
             input_dim=train_data.shape[1],
             condition_dim=train_covariates.shape[1]
         )
+        model_dir = Path(self.config['paths']['model_dir'])
 
         # Initialize logger
         loss_keys = ['total_loss', 'reconstruction', 'discriminator', 'generator']
@@ -82,8 +83,7 @@ class AAETrainer:
                 patience_counter = 0
                 
                 # Save best model
-                model_path = Path(self.config['paths']['model_dir']) / 'best_model.pt'
-                torch.save(model.state_dict(), model_path)
+                torch.save(model.state_dict(), model_dir / 'best_model.pt')
             else:
                 patience_counter += 1
                 if patience_counter >= self.config['training']['early_stopping_patience']:
@@ -94,8 +94,13 @@ class AAETrainer:
                        f"Train Loss = {train_losses['total_loss']:.4f}, "
                        f"Val Loss = {val_losses['total_loss']:.4f}")
                        
+        # Save final model
+        torch.save(model.state_dict(), model_dir / 'final_model.pt')
+        torch.save(model, model_dir / 'final_model.pkl')
+        logger.info(f"Saved final model to {model_dir}")
+        
         # Plot losses at the end of training
-        plot_losses_aae(self.loss_logger, self.config['paths']['model_dir'], title='_direct_training')
+        plot_losses(self.loss_logger, self.config['paths']['model_dir'], title='_direct_training')
         return model
 
     def _train_epoch(self, model, train_loader, epoch, base_lr, max_lr, gamma):

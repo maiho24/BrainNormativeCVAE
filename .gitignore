@@ -6,3 +6,5 @@ configs/bootstrap_config.yaml
 output/
 **/__pycache__/
 **/**/__pycache__/
+**/*.pak
+**/**/*.pak

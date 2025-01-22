@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """
-Script to train the Conditional Adversarial Autoencoder (CAAE) model.
+Script to train the Conditional Adversarial Autoencoder (cAAE) model.
 Supports both direct training and bootstrap training modes.
 """
 
 import argparse
 import sys
+import yaml
+import numpy as np
+import random
+import pandas as pd
+import torch
 
 def create_parser():
     """Create argument parser with detailed help messages."""
@@ -13,13 +18,12 @@ def create_parser():
         description="""
         Brain Normative AAE Model Training
         
-        This script trains an Adversarial Autoencoder (AAE) for normative modeling 
-        of brain imaging data. It supports both direct training and bootstrap training
-        for robustness assessment.
+        This script trains a conditional Adversarial Autoencoder (cAAE) for normative modeling 
+        of brain imaging data. It supports both direct training and bootstrap training.
         
         Example usage:
-          train-aae --config configs/aae_config.yaml --mode direct
-          train-aae --config configs/bootstrap_aae_config.yaml --mode bootstrap
+          brain-aae-train --config configs/aae_config.yaml --mode direct
+          brain-aae-train --config configs/bootstrap_aae_config.yaml --mode bootstrap --gpu
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -73,13 +77,8 @@ def set_random_seeds(seed):
 def run_training(args, config):
     """Execute the training process based on the specified mode."""
     # Import project modules
-    import yaml
     from pathlib import Path
     import logging
-    import torch
-    import numpy as np
-    import random
-    import pandas as pd
     sys.path.append(str(Path(__file__).parent.parent))
     from src.training.aae_trainer import AAETrainer
     from src.training.bootstrap_aae_trainer import BootstrapAAETrainer
@@ -139,11 +138,6 @@ def run_training(args, config):
                 val_data,
                 val_covariates
             )
-            
-            # Save final model
-            model_path = model_dir / 'final_model.pt'
-            torch.save(model.state_dict(), model_path)
-            logger.info(f"Saved final model to {model_path}")
             
         logger.info("Training completed successfully")
 

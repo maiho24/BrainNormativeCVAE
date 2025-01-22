@@ -9,7 +9,7 @@ import logging
 from torch.utils.data import DataLoader
 from ..models.aae import AAE
 from ..utils.data import MyDataset
-from ..utils.logger import Logger, plot_losses, plot_losses_aae
+from ..utils.logger import Logger, plot_losses
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,8 @@ class BootstrapAAETrainer:
             
             # Save model and plot losses
             torch.save(model.state_dict(), model_dir / "model.pt")
-            plot_losses_aae(loss_logger, model_dir, title=f'_bootstrap_{i+1}')
+            torch.save(model, model_dir / "model.pkl")
+            plot_losses(loss_logger, model_dir, title=f'_bootstrap_{i+1}', val_plot=False)
             
     def train_single_model(self, model, loader, bootstrap_idx, output_dir, loss_logger):
         """Train a single AAE model with cyclical learning rate."""

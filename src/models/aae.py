@@ -11,16 +11,13 @@ class Encoder(nn.Module):
         super().__init__()
         self.non_linear = non_linear
         
-        # Create layer sizes list
         layer_sizes = [input_dim] + hidden_dim
         
-        # Create hidden layers
         self.hidden_layers = nn.ModuleList([
             nn.Linear(dim_in, dim_out) 
             for dim_in, dim_out in zip(layer_sizes[:-1], layer_sizes[1:])
         ])
         
-        # Output layer to latent space
         self.latent_layer = nn.Linear(hidden_dim[-1], latent_dim)
         
         self.leaky_relu = nn.LeakyReLU()
@@ -30,7 +27,7 @@ class Encoder(nn.Module):
             x = layer(x)
             if self.non_linear:
                 x = self.leaky_relu(x)
-        return self.latent_layer(x)  # Linear activation for latent code
+        return self.latent_layer(x)
 
 class Decoder(nn.Module):
     def __init__(self, latent_dim, hidden_dim, output_dim, condition_dim, non_linear=True):
@@ -47,18 +44,14 @@ class Decoder(nn.Module):
         super().__init__()
         self.non_linear = non_linear
         
-        # Create layer sizes list (reversed hidden_dim)
         layer_sizes = [latent_dim + condition_dim] + hidden_dim[::-1]
         
-        # Create hidden layers
         self.hidden_layers = nn.ModuleList([
             nn.Linear(dim_in, dim_out)
             for dim_in, dim_out in zip(layer_sizes[:-1], layer_sizes[1:])
         ])
         
-        # Output layer
         self.output_layer = nn.Linear(hidden_dim[0], output_dim)
-        
         self.leaky_relu = nn.LeakyReLU()
 
     def forward(self, z, condition):
@@ -67,23 +60,20 @@ class Decoder(nn.Module):
             x = layer(x)
             if self.non_linear:
                 x = self.leaky_relu(x)
-        return self.output_layer(x)  # Linear activation for output
+        return self.output_layer(x)
 
 class Discriminator(nn.Module):
     def __init__(self, input_dim, hidden_dim, non_linear=True):
         super().__init__()
         self.non_linear = non_linear
         
-        # Create layer sizes list
         layer_sizes = [input_dim] + hidden_dim
         
-        # Create hidden layers
         self.hidden_layers = nn.ModuleList([
             nn.Linear(dim_in, dim_out)
             for dim_in, dim_out in zip(layer_sizes[:-1], layer_sizes[1:])
         ])
         
-        # Output layer
         self.output_layer = nn.Linear(hidden_dim[-1], 1)
         
         self.leaky_relu = nn.LeakyReLU()
@@ -107,7 +97,6 @@ class AAE(nn.Module):
         self.latent_dim = latent_dim
         self.non_linear = non_linear
         
-        # Initialize components
         self.encoder = Encoder(
             input_dim=input_dim,
             hidden_dim=hidden_dim,
@@ -129,11 +118,9 @@ class AAE(nn.Module):
             non_linear=non_linear
         )
         
-        # Loss functions
         self.reconstruction_criterion = nn.MSELoss()
         self.adversarial_criterion = nn.BCELoss()
         
-        # Initialize optimizers
         self.enc_dec_optimizer = torch.optim.Adam(
             list(self.encoder.parameters()) + list(self.decoder.parameters()),
             lr=learning_rate
@@ -178,7 +165,6 @@ class AAE(nn.Module):
             fake_pred, torch.zeros_like(fake_pred))
         d_loss = d_loss_real + d_loss_fake
         
-        # Update discriminator
         self.disc_optimizer.zero_grad()
         d_loss.backward()
         self.disc_optimizer.step()
@@ -188,7 +174,6 @@ class AAE(nn.Module):
         g_loss = self.adversarial_criterion(
             fake_pred, torch.ones_like(fake_pred))
         
-        # Update encoder and decoder
         self.enc_dec_optimizer.zero_grad()
         (recon_loss + g_loss).backward()
         self.enc_dec_optimizer.step()
@@ -197,7 +182,7 @@ class AAE(nn.Module):
             'reconstruction': recon_loss,
             'discriminator': d_loss,
             'generator': g_loss,
-            'total_loss': recon_loss + g_loss
+            'total_loss': recon_loss + 0.1*g_loss
         }
 
     def compute_reconstruction_error(self, x, condition):
