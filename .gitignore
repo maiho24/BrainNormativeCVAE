@@ -1,6 +1,8 @@
 *.egg-info
 configs/custom_config.yaml
 configs/optuna_config.yaml
+configs/aae_config.yaml
+configs/bootstrap_config.yaml
 output/
 **/__pycache__/
 **/**/__pycache__/
