@@ -92,8 +92,12 @@ class Decoder(nn.Module):
             if self.non_linear:
                 conditional_z = F.relu(conditional_z)
 
-        mu_out = self.decoder_mean_layer(conditional_z)
-        return Normal(loc=mu_out, scale=torch.exp(0.5 * self.logvar_out))
+        mu_out = self.decoder_mean_layer(conditional_z) 
+        logvar_out = torch.clamp(self.logvar_out, min=-10.0, max=10.0)
+        scale = torch.exp(0.5 * logvar_out).expand_as(mu_out)
+        scale = scale + 1e-6
+        
+        return Normal(loc=mu_out, scale=scale)
 
 
 class cVAE(nn.Module):
