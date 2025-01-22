@@ -13,6 +13,8 @@ import torch
 import numpy as np
 import random
 import pandas as pd
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 def create_parser():
     """Create argument parser with detailed help messages."""

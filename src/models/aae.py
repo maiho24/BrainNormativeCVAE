@@ -1,8 +1,5 @@
 """
-Adversarial Autoencoder (AAE) Implementation with Flexible Architecture
-
-This implementation allows for flexible architecture definition through the config file,
-supporting variable numbers and sizes of hidden layers.
+Adversarial Autoencoder (AAE) Implementation
 """
 
 import torch
