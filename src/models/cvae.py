@@ -96,7 +96,7 @@ class Decoder(nn.Module):
         logvar_out = torch.clamp(self.logvar_out, min=-10.0, max=10.0)
         scale = torch.exp(0.5 * logvar_out).expand_as(mu_out)
         scale = scale + 1e-6
-        
+        mu_out = torch.clamp(mu_out, min=-1e6, max=1e6)
         return Normal(loc=mu_out, scale=scale)
 
 
