@@ -16,7 +16,7 @@ Using Conda helps manage dependencies and ensures compatibility across different
 
 1. Create and activate a new conda environment:
 ```bash
-conda create -n brain_cvae
+conda create -n brain_cvae python=3.9
 conda activate brain_cvae
 ```
 2. Clone and install the package:
