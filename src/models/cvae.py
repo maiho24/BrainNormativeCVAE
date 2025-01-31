@@ -3,7 +3,7 @@ Conditional Variational Autoencoder (cVAE) Implementation
 
 This implementation extends the normative modelling framework by 
 Lawry Aguila et al. (2022) (https://github.com/alawryaguila/normativecVAE),
-with refinements in both the model architecture and inference approach.
+with substantial refinements in both the model architecture and inference approach.
 
 References:
     Lawry Aguila, A., Chapman, J., Janahi, M., Altmann, A. (2022). 
