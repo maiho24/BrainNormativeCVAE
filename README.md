@@ -144,6 +144,21 @@ paths:
 device:
   gpu: true
 ```
+#### Command Line Arguments
+
+```
+Required arguments:
+  --config PATH              Path to configuration file (required)
+
+Optional arguments:
+  --mode TYPE                Training mode: direct or optuna (default: direct)
+  --data_dir PATH            Override data directory specified in config file
+  --output_dir PATH          Override output directory specified in config file
+  --gpu                      Use GPU for training if available
+```
+The package provides two training options:
+- **direct** (default): Train with parameters specified in config file
+- **optuna**: Perform hyperparameter optimization with the [Optuna](https://optuna.org/) framework
 
 ### Inference Configuration
 For inference, you can either:
@@ -180,8 +195,8 @@ Optional arguments:
 ```
 
 The package provides two prediction modes:
-- Covariate-based (Default, Primary approach): Generates normative predictions directly from demographic and clinical variables
-- Dual-input (For comparison only): Uses both observed data and covariates for prediction, implemented solely for methodological comparison purposes (see our [preprint](https://www.biorxiv.org/content/10.1101/2025.01.05.631276v1) for detailed discussion)
+- **Covariate-based (Default, Primary approach)**: Generates normative predictions directly from demographic and clinical variables
+- **Dual-input (For comparison only)**: Uses both observed data and covariates for prediction, implemented solely for methodological comparison purposes (see our [preprint](https://www.biorxiv.org/content/10.1101/2025.01.05.631276v1) for detailed discussion)
 
 ## Output Directory Structure
 
