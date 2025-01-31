@@ -5,12 +5,6 @@ from pathlib import Path
 import logging
 import yaml
 import numpy as np
-import warnings
-
-warnings.filterwarnings('ignore', 
-    message='Choices for a categorical distribution should be a tuple of None, bool, int, float and str.*',
-    category=UserWarning,
-    module='optuna.distributions')
 
 from ..models.cvae import cVAE
 from ..utils.data import MyDataset
@@ -41,12 +35,29 @@ class OptunaTrainer:
         
         # Set up Optuna study
         self.study = optuna.create_study(direction="minimize")
+        
+    def _parse_hidden_dim(self, hidden_dim_str):
+        """
+        Parse string representation of hidden dimensions into list of integers.
+        
+        Args:
+            hidden_dim_str: String representation of hidden dimensions (e.g., "64_32")
+            
+        Returns:
+            List of integers representing hidden dimensions
+        """
+        try:
+            return [int(x) for x in hidden_dim_str.split('_')]
+        except (ValueError, AttributeError) as e:
+            logger.error(f"Error parsing hidden dimensions {hidden_dim_str}: {str(e)}")
+            raise ValueError(f"Invalid hidden dimension format: {hidden_dim_str}. Expected format: 'dim1_dim2' or 'dim1'")
 
     def create_model(self, trial):
         """Create model with parameters suggested by Optuna."""
         # Suggest hyperparameters
-        hidden_dim = trial.suggest_categorical('hidden_dim', 
+        hidden_dim_str = trial.suggest_categorical('hidden_dim', 
             self.config['optuna']['search_space']['hidden_dim']['choices'])
+        hidden_dim = self._parse_hidden_dim(hidden_dim_str)
         latent_dim = trial.suggest_categorical('latent_dim', 
             self.config['optuna']['search_space']['latent_dim']['choices'])
         learning_rate = trial.suggest_float('learning_rate',

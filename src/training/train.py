@@ -31,13 +31,32 @@ def validate_model(model, generator_val, device):
     return (total_val_loss / num_batches,
             val_kl_loss / num_batches,
             val_ll_loss / num_batches)
+            
+def parse_hidden_dim(hidden_dim):
+    """
+    Parse hidden dimensions from string format.
+    
+    Args:
+        hidden_dim: String in format "dim1_dim2" or "dim1"
+        
+    Returns:
+        List of integers representing hidden dimensions
+    """
+    if not isinstance(hidden_dim, str):
+        raise ValueError(f"Hidden dimensions must be a string (e.g., '64_32'), got {type(hidden_dim)}")
+    
+    try:
+        return [int(x) for x in hidden_dim.split('_')]
+    except (ValueError, AttributeError) as e:
+        logger.error(f"Error parsing hidden dimensions {hidden_dim}: {str(e)}")
+        raise ValueError(f"Invalid hidden dimension format: {hidden_dim}. Expected format: 'dim1_dim2' or 'dim1'")
 
 def train_model(train_data, train_covariates, val_data, val_covariates, config):
-    """Train the cVAE model."""
+    """Train the cVAE model with the given configurations."""
     # Setup device
     device = torch.device("cuda" if config['device']['gpu'] and torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
-
+    
     # Create datasets and dataloaders
     train_dataset = MyDataset(train_data, train_covariates)
     val_dataset = MyDataset(val_data, val_covariates)
@@ -56,7 +75,7 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
     # Initialize model
     model = cVAE(
         input_dim=train_data.shape[1],
-        hidden_dim=config['model']['hidden_dim'],
+        hidden_dim=parse_hidden_dim(config['model']['hidden_dim']),
         latent_dim=config['model']['latent_dim'],
         c_dim=train_covariates.shape[1],
         learning_rate=config['model']['learning_rate'],

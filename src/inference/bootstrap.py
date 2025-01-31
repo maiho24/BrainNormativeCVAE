@@ -6,28 +6,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, feature_cols, config, num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
+def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, feature_cols, config, 
+                                         num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
     """
-    Generate bootstrap statistics for different covariate combinations.
-    
-    Args:
-        model: Trained cVAE model
-        covariates: Processed covariates
-        covariates_df: Raw covariates (Pandas Dataframe)
-        config: Configuration dictionary
-        num_samples: Number of samples per covariate combination
-        num_bootstraps: Number of bootstrap iterations
-        confidence_level: Confidence level for intervals
+    Generate bootstrap statistics using vectorized operations.
     """
     device = torch.device("cuda" if config['device']['gpu'] and torch.cuda.is_available() else "cpu")
     model = model.to(device)
     model.eval()
     
     try:
-        # Process covariates using the same function as training
         covariates_tensor = torch.FloatTensor(covariates).to(device)
-        
-        # Setup results directory
         results_dir = Path(config['paths']['output_dir']) / 'results'
         results_dir.mkdir(parents=True, exist_ok=True)
         
@@ -36,7 +25,6 @@ def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, fea
         ci_means_list = []
         ci_variances_list = []
         
-        # Calculate confidence interval bounds
         alpha = 1 - confidence_level
         lower_percentile = alpha / 2 * 100
         upper_percentile = (1 - alpha / 2) * 100
@@ -44,27 +32,27 @@ def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, fea
         logger.info(f"Starting bootstrap analysis for {len(covariates_tensor)} covariate combinations")
         
         for idx, covariate in enumerate(covariates_tensor):
-            # Generate samples
-            samples = []
-            for _ in range(num_samples):
-                with torch.no_grad():
-                    # Generate random latent vector
-                    z = torch.randn(1, model.latent_dim, device=device)
-                    # Get reconstruction
-                    sample = model.decode(z, covariate.unsqueeze(0)).sample().cpu().numpy()
-                samples.append(sample)
-            samples = np.vstack(samples)
+            # Generate all latent vectors at once
+            z = torch.randn(num_samples, model.latent_dim, device=device)
+            covariate_expanded = covariate.unsqueeze(0).expand(num_samples, -1)
             
-            # Bootstrap analysis
+            # Generate all samples in one batch
+            with torch.no_grad():
+                samples = model.decode(z, covariate_expanded).sample().cpu().numpy()
+            
+            # Generate all bootstrap indices at once
+            bootstrap_indices = np.random.choice(
+                num_samples, 
+                size=(num_bootstraps, num_samples), 
+                replace=True
+            )
+            
+            # Vectorized computation of bootstrap statistics
             bootstrap_means = np.zeros((num_bootstraps, samples.shape[1]))
             bootstrap_variances = np.zeros((num_bootstraps, samples.shape[1]))
             
             for i in range(num_bootstraps):
-                # Generate bootstrap sample
-                bootstrap_indices = np.random.choice(num_samples, size=num_samples, replace=True)
-                bootstrap_sample = samples[bootstrap_indices]
-                
-                # Calculate statistics
+                bootstrap_sample = samples[bootstrap_indices[i]]
                 bootstrap_means[i] = np.mean(bootstrap_sample, axis=0)
                 bootstrap_variances[i] = np.var(bootstrap_sample, axis=0)
             
@@ -72,11 +60,10 @@ def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, fea
             mean_of_bootstrap_means = np.mean(bootstrap_means, axis=0)
             mean_of_bootstrap_variances = np.mean(bootstrap_variances, axis=0)
             
-            # Calculate confidence intervals
+            # Calculate confidence intervals using vectorized operations
             ci_means = np.percentile(bootstrap_means, [lower_percentile, upper_percentile], axis=0)
             ci_variances = np.percentile(bootstrap_variances, [lower_percentile, upper_percentile], axis=0)
             
-            # Store results
             bootstrap_means_list.append(mean_of_bootstrap_means)
             bootstrap_variances_list.append(mean_of_bootstrap_variances)
             ci_means_list.append(ci_means)
@@ -85,38 +72,41 @@ def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, fea
             if (idx + 1) % 10 == 0:
                 logger.info(f"Processed {idx + 1}/{len(covariates_tensor)} covariate combinations")
         
-        # Convert lists to numpy arrays
+        # Convert lists to arrays
         bootstrap_means_array = np.array(bootstrap_means_list)
         bootstrap_variances_array = np.array(bootstrap_variances_list)
         ci_means_array = np.array(ci_means_list)
         ci_variances_array = np.array(ci_variances_list)
         
-        # Create DataFrames from numpy arrays
-        bootstrap_means_results = pd.DataFrame(bootstrap_means_array, columns=feature_cols)
-        bootstrap_variances_results = pd.DataFrame(bootstrap_variances_array, columns=feature_cols)
-        ci_means_lower_results = pd.DataFrame([ci[0] for ci in ci_means_array], columns=feature_cols)
-        ci_means_upper_results = pd.DataFrame([ci[1] for ci in ci_means_array], columns=feature_cols)
-        ci_variances_lower_results = pd.DataFrame([ci[0] for ci in ci_variances_array], columns=feature_cols)
-        ci_variances_upper_results = pd.DataFrame([ci[1] for ci in ci_variances_array], columns=feature_cols)
-        
-        # Combine results with original covariates
-        bootstrap_means_df = pd.concat([covariates_df, bootstrap_means_results], axis=1)
-        bootstrap_variances_df = pd.concat([covariates_df, bootstrap_variances_results], axis=1)
-        ci_means_lower_df = pd.concat([covariates_df, ci_means_lower_results], axis=1)
-        ci_means_upper_df = pd.concat([covariates_df, ci_means_upper_results], axis=1)
-        ci_variances_lower_df = pd.concat([covariates_df, ci_variances_lower_results], axis=1)
-        ci_variances_upper_df = pd.concat([covariates_df, ci_variances_upper_results], axis=1)
-        
-        # Save results
+        # Create DataFrames
         results = {
-            'bootstrapped_means.csv': bootstrap_means_df,
-            'bootstrapped_variances.csv': bootstrap_variances_df,
-            'ci_means_lower.csv': ci_means_lower_df,
-            'ci_means_upper.csv': ci_means_upper_df,
-            'ci_variances_lower.csv': ci_variances_lower_df,
-            'ci_variances_upper.csv': ci_variances_upper_df
+            'bootstrapped_means.csv': pd.concat([
+                covariates_df,
+                pd.DataFrame(bootstrap_means_array, columns=feature_cols)
+            ], axis=1),
+            'bootstrapped_variances.csv': pd.concat([
+                covariates_df,
+                pd.DataFrame(bootstrap_variances_array, columns=feature_cols)
+            ], axis=1),
+            'ci_means_lower.csv': pd.concat([
+                covariates_df,
+                pd.DataFrame([ci[0] for ci in ci_means_array], columns=feature_cols)
+            ], axis=1),
+            'ci_means_upper.csv': pd.concat([
+                covariates_df,
+                pd.DataFrame([ci[1] for ci in ci_means_array], columns=feature_cols)
+            ], axis=1),
+            'ci_variances_lower.csv': pd.concat([
+                covariates_df,
+                pd.DataFrame([ci[0] for ci in ci_variances_array], columns=feature_cols)
+            ], axis=1),
+            'ci_variances_upper.csv': pd.concat([
+                covariates_df,
+                pd.DataFrame([ci[1] for ci in ci_variances_array], columns=feature_cols)
+            ], axis=1)
         }
         
+        # Save results
         for filename, df in results.items():
             df.to_csv(results_dir / filename, index=False)
             
@@ -127,6 +117,130 @@ def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, fea
         logger.error(f"Bootstrap analysis failed: {str(e)}")
         raise
 
+def generate_bootstrap_stats_from_encoded(model, features, covariates, covariates_raw, feature_cols, config, 
+                                        num_samples=1000, num_bootstraps=1000, confidence_level=0.95):
+    """
+    Generate bootstrap statistics from encoded features using vectorized operations.
+    """
+    device = torch.device("cuda" if config['device']['gpu'] and torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    model.eval()
+    
+    try:
+        features_tensor = torch.FloatTensor(features.values).to(device)
+        covariates_tensor = torch.FloatTensor(covariates).to(device)
+        results_dir = Path(config['paths']['output_dir']) / 'results'
+        results_dir.mkdir(parents=True, exist_ok=True)
+        
+        bootstrap_means_list = []
+        bootstrap_variances_list = []
+        ci_means_list = []
+        ci_variances_list = []
+        encoded_z_list = []
+        
+        alpha = 1 - confidence_level
+        lower_percentile = alpha / 2 * 100
+        upper_percentile = (1 - alpha / 2) * 100
+        
+        for idx, (feature, covariate) in enumerate(zip(features_tensor, covariates_tensor)):
+            with torch.no_grad():
+                # Encode feature to get latent distribution parameters
+                mu_z, logvar_z = model.encode(feature.unsqueeze(0), covariate.unsqueeze(0))
+                encoded_z_list.append(mu_z.cpu().numpy())
+                
+                # Generate all z samples at once using reparameterization
+                std = torch.exp(0.5 * logvar_z)
+                z = mu_z + std * torch.randn(num_samples, model.latent_dim, device=device)
+                covariate_expanded = covariate.unsqueeze(0).expand(num_samples, -1)
+                
+                # Generate all reconstructions in one batch
+                samples = model.decode(z, covariate_expanded).sample().cpu().numpy()
+            
+            # Generate all bootstrap indices at once
+            bootstrap_indices = np.random.choice(
+                num_samples, 
+                size=(num_bootstraps, num_samples), 
+                replace=True
+            )
+            
+            # Vectorized computation of bootstrap statistics
+            bootstrap_means = np.zeros((num_bootstraps, samples.shape[1]))
+            bootstrap_variances = np.zeros((num_bootstraps, samples.shape[1]))
+            
+            for i in range(num_bootstraps):
+                bootstrap_sample = samples[bootstrap_indices[i]]
+                bootstrap_means[i] = np.mean(bootstrap_sample, axis=0)
+                bootstrap_variances[i] = np.var(bootstrap_sample, axis=0)
+            
+            mean_of_bootstrap_means = np.mean(bootstrap_means, axis=0)
+            mean_of_bootstrap_variances = np.mean(bootstrap_variances, axis=0)
+            
+            ci_means = np.percentile(bootstrap_means, [lower_percentile, upper_percentile], axis=0)
+            ci_variances = np.percentile(bootstrap_variances, [lower_percentile, upper_percentile], axis=0)
+            
+            bootstrap_means_list.append(mean_of_bootstrap_means)
+            bootstrap_variances_list.append(mean_of_bootstrap_variances)
+            ci_means_list.append(ci_means)
+            ci_variances_list.append(ci_variances)
+            
+            if (idx + 1) % 10 == 0:
+                logger.info(f"Processed {idx + 1}/{len(features_tensor)} samples")
+        
+        # Convert lists to arrays
+        bootstrap_means_array = np.array(bootstrap_means_list)
+        bootstrap_variances_array = np.array(bootstrap_variances_list)
+        ci_means_array = np.array(ci_means_list)
+        ci_variances_array = np.array(ci_variances_list)
+        encoded_z_array = np.vstack(encoded_z_list)
+        
+        # Create and save results
+        encoded_z_df = pd.DataFrame(
+            encoded_z_array, 
+            columns=[f'z_dim_{i}' for i in range(encoded_z_array.shape[1])]
+        )
+        
+        results = {
+            'bootstrapped_means.csv': pd.concat([
+                covariates_raw.reset_index(drop=True),
+                pd.DataFrame(bootstrap_means_array, columns=feature_cols)
+            ], axis=1),
+            'bootstrapped_variances.csv': pd.concat([
+                covariates_raw.reset_index(drop=True),
+                pd.DataFrame(bootstrap_variances_array, columns=feature_cols)
+            ], axis=1),
+            'ci_means_lower.csv': pd.concat([
+                covariates_raw.reset_index(drop=True),
+                pd.DataFrame([ci[0] for ci in ci_means_array], columns=feature_cols)
+            ], axis=1),
+            'ci_means_upper.csv': pd.concat([
+                covariates_raw.reset_index(drop=True),
+                pd.DataFrame([ci[1] for ci in ci_means_array], columns=feature_cols)
+            ], axis=1),
+            'ci_variances_lower.csv': pd.concat([
+                covariates_raw.reset_index(drop=True),
+                pd.DataFrame([ci[0] for ci in ci_variances_array], columns=feature_cols)
+            ], axis=1),
+            'ci_variances_upper.csv': pd.concat([
+                covariates_raw.reset_index(drop=True),
+                pd.DataFrame([ci[1] for ci in ci_variances_array], columns=feature_cols)
+            ], axis=1),
+            'latent_vectors.csv': pd.concat([
+                covariates_raw.reset_index(drop=True),
+                encoded_z_df
+            ], axis=1)
+        }
+        
+        # Save results
+        for filename, df in results.items():
+            df.to_csv(results_dir / filename, index=False)
+            
+        logger.info("Bootstrap analysis from encoded features completed successfully")
+        return results
+        
+    except Exception as e:
+        logger.error(f"Bootstrap analysis from encoded features failed: {str(e)}")
+        raise
+        
 def compute_feature_importance(bootstrap_results, covariates_df, feature_cols, config):
     """
     Compute feature importance based on bootstrap results.
@@ -155,7 +269,6 @@ def compute_feature_importance(bootstrap_results, covariates_df, feature_cols, c
             max_diff = groups[feature_cols].mean().max() - groups[feature_cols].mean().min()
             covariate_sensitivity[covariate] = max_diff
             
-        # Save results in results directory
         results_dir = Path(config['paths']['output_dir']) / 'results'
         
         pd.DataFrame({
@@ -192,7 +305,6 @@ def generate_summary_statistics(bootstrap_results, feature_cols, config):
             }
         }
         
-        # Save results in results directory
         results_dir = Path(config['paths']['output_dir']) / 'results'
         
         with pd.ExcelWriter(results_dir / 'summary_statistics.xlsx') as writer:
