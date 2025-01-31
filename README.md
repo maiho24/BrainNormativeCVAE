@@ -147,8 +147,8 @@ device:
 #### Command Line Arguments
 
 ```
-Required arguments:
-  --config PATH              Path to configuration file (required)
+Required argument:
+  --config PATH              Path to configuration file
 
 Optional arguments:
   --mode TYPE                Training mode: direct or optuna (default: direct)
@@ -158,7 +158,7 @@ Optional arguments:
 ```
 The package provides two training options:
 - **direct** (default): Train with parameters specified in config file
-- **optuna**: Perform hyperparameter optimization with the [Optuna](https://optuna.org/) framework
+- **optuna**: Perform hyperparameter optimization using the [Optuna](https://optuna.org/) framework
 
 ### Inference Configuration
 For inference, you can either:
