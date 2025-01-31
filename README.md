@@ -104,7 +104,7 @@ Create a YAML configuration file with the following structure for training:
 
 ```yaml
 model:
-  hidden_dim: "128_64"  # Hidden layer architecture in string format, e.g., "128_64" for two layers
+  hidden_dim: "128_64"  # Required if "direct" mode is used. Hidden layer architecture in string format, e.g., "128_64" for two layers
   latent_dim: 32        # Required if "direct" mode is used
   non_linear: true
   beta: 1.0             # Required if "direct" mode is used
@@ -163,7 +163,7 @@ device:
 
 Note: Command line arguments (`--data_dir`, `--output_dir`, `--gpu`) will override the corresponding values in the config file if both are provided.
 
-### Command Line Arguments
+#### Command Line Arguments
 
 ```
 Required arguments (either --config OR both --data_dir and --output_dir must be provided):
@@ -178,6 +178,10 @@ Optional arguments:
   --prediction_type TYPE     Method for prediction: covariate or dual_input (default: covariate)
   --gpu                      Use GPU for inference if available
 ```
+
+The package provides two prediction modes:
+- Covariate-based (Default, Primary approach): Generates normative predictions directly from demographic and clinical variables
+- Dual-input (For comparison only): Uses both observed data and covariates for prediction, implemented solely for methodological comparison purposes (see our [preprint](https://www.biorxiv.org/content/10.1101/2025.01.05.631276v1) for detailed discussion)
 
 ## Output Directory Structure
 
