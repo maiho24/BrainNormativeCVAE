@@ -17,7 +17,7 @@ def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, fea
     
     try:
         covariates_tensor = torch.FloatTensor(covariates).to(device)
-        results_dir = Path(config['paths']['output_dir']) / 'results'
+        results_dir = Path(config['paths']['output_dir']) / 'results_covariate'
         results_dir.mkdir(parents=True, exist_ok=True)
         
         bootstrap_means_list = []
@@ -129,7 +129,7 @@ def generate_bootstrap_stats_from_encoded(model, features, covariates, covariate
     try:
         features_tensor = torch.FloatTensor(features.values).to(device)
         covariates_tensor = torch.FloatTensor(covariates).to(device)
-        results_dir = Path(config['paths']['output_dir']) / 'results'
+        results_dir = Path(config['paths']['output_dir']) / 'results_dual_input'
         results_dir.mkdir(parents=True, exist_ok=True)
         
         bootstrap_means_list = []
@@ -241,7 +241,7 @@ def generate_bootstrap_stats_from_encoded(model, features, covariates, covariate
         logger.error(f"Bootstrap analysis from encoded features failed: {str(e)}")
         raise
         
-def compute_feature_importance(bootstrap_results, covariates_df, feature_cols, config):
+def compute_feature_importance(bootstrap_results, covariates_df, feature_cols, config, prediction_type):
     """
     Compute feature importance based on bootstrap results.
     
@@ -269,7 +269,7 @@ def compute_feature_importance(bootstrap_results, covariates_df, feature_cols, c
             max_diff = groups[feature_cols].mean().max() - groups[feature_cols].mean().min()
             covariate_sensitivity[covariate] = max_diff
             
-        results_dir = Path(config['paths']['output_dir']) / 'results'
+        results_dir = Path(config['paths']['output_dir']) / 'results_{}'.format(prediction_type)
         
         pd.DataFrame({
             'feature_variability': feature_variability
@@ -284,7 +284,7 @@ def compute_feature_importance(bootstrap_results, covariates_df, feature_cols, c
         logger.error(f"Feature importance analysis failed: {str(e)}")
         raise
 
-def generate_summary_statistics(bootstrap_results, feature_cols, config):
+def generate_summary_statistics(bootstrap_results, feature_cols, config, prediction_type):
     """Generate summary statistics from bootstrap results."""
     try:
         means_df = bootstrap_results['bootstrapped_means.csv']
@@ -305,7 +305,7 @@ def generate_summary_statistics(bootstrap_results, feature_cols, config):
             }
         }
         
-        results_dir = Path(config['paths']['output_dir']) / 'results'
+        results_dir = Path(config['paths']['output_dir']) / 'results_{}'.format(prediction_type)
         
         with pd.ExcelWriter(results_dir / 'summary_statistics.xlsx') as writer:
             for stat_type, stats in summary_stats.items():

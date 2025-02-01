@@ -174,7 +174,8 @@ def run_inference(args, config):
             bootstrap_results=results,
             covariates_df=test_covariates_raw,
             feature_cols=feature_cols,
-            config=config
+            config=config,
+            prediction_type=args.prediction_type
         )
         
         # Generate summary statistics
@@ -182,7 +183,8 @@ def run_inference(args, config):
         summary_stats = generate_summary_statistics(
             bootstrap_results=results,
             feature_cols=feature_cols,
-            config=config
+            config=config,
+            prediction_type=args.prediction_type
         )
         
         logger.info("Inference completed successfully")
