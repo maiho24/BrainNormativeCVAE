@@ -109,10 +109,8 @@ def run_inference(args, config):
     import numpy as np
     from datetime import datetime
     
-    # Add project root to path
     sys.path.append(str(Path(__file__).parent.parent))
     
-    # Import project-specific modules
     from src.inference.bootstrap import (
         generate_bootstrap_stats_by_covariates, 
         generate_bootstrap_stats_from_encoded, 
@@ -123,27 +121,21 @@ def run_inference(args, config):
     from src.utils.data import load_test_data, process_covariates
     from src.utils.logger import setup_logging
 
-    # Create output directory structure
     output_dir = Path(config['paths']['output_dir'])
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Setup logging
     logger = setup_logging(output_dir, 'inference')
     
     try:
-        # Load model
         logger.info("Loading model...")
         model = torch.load(args.model_path, map_location=torch.device('cpu'))
         model.eval()
 
-        # Load and process test data
         logger.info("Loading and processing test data...")
         test_data, test_covariates_raw, test_covariates_processed = load_test_data(config['paths']['data_dir'], logger)
         
-        # Extract features' column names
         feature_cols = test_data.columns.tolist()
         
-        # Run predictions based on specified method
         if args.prediction_type == 'covariate':
             logger.info("Starting covariate-based predictions...")
             results = generate_bootstrap_stats_by_covariates(
@@ -168,7 +160,6 @@ def run_inference(args, config):
                 num_bootstraps=args.num_bootstraps
             )
             
-        # Compute feature importance
         logger.info(f"Computing feature importance for {args.prediction_type} predictions...")
         feature_variability, covariate_sensitivity = compute_feature_importance(
             bootstrap_results=results,
@@ -178,7 +169,6 @@ def run_inference(args, config):
             prediction_type=args.prediction_type
         )
         
-        # Generate summary statistics
         logger.info(f"Generating summary statistics for {args.prediction_type} predictions...")
         summary_stats = generate_summary_statistics(
             bootstrap_results=results,
@@ -204,17 +194,14 @@ def main():
     
     args = validate_args(args, parser)
 
-    # Load or create configuration
     if args.config:
         with open(args.config, 'r') as f:
             config = yaml.safe_load(f)
-        # Override config with command line arguments if provided
         if args.data_dir:
             config['paths']['data_dir'] = args.data_dir
         if args.output_dir:
             config['paths']['output_dir'] = args.output_dir
     else:
-        # Create default config from command line arguments
         config = create_default_config(args)
 
     config['device']['gpu'] = args.gpu

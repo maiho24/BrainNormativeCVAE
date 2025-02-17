@@ -25,7 +25,22 @@ def compute_mse(Y, Y_recon):
     Y_recon_mean = Y_recon.loc
     return ((Y - Y_recon_mean)**2).mean()
 
-
+def compute_huber_loss(Y, Y_recon, delta=1.0):
+    """
+    Compute Huber loss between target Y and reconstructed Y_recon
+    Args:
+        Y: target values
+        Y_recon: Normal distribution of reconstructed values
+        delta: threshold parameter for Huber loss (default: 1.0)
+    """
+    Y_recon_mean = Y_recon.loc
+    diff = Y - Y_recon_mean
+    abs_diff = torch.abs(diff)
+    quadratic = torch.min(abs_diff, torch.tensor(delta))
+    linear = abs_diff - quadratic
+    loss = 0.5 * quadratic.pow(2) + delta * linear
+    return loss.mean()
+    
 class Encoder(nn.Module):
     def __init__(
                 self, 
@@ -108,6 +123,7 @@ class cVAE(nn.Module):
                 c_dim, 
                 learning_rate=0.001,
                 beta=1,
+                delta=1.0,
                 non_linear=False):
         
         super().__init__()
@@ -116,6 +132,7 @@ class cVAE(nn.Module):
         self.latent_dim = latent_dim
         self.c_dim = c_dim
         self.beta = beta
+        self.delta = delta
         self.encoder = Encoder(input_dim=input_dim, hidden_dim=self.hidden_dim, c_dim=c_dim, non_linear=non_linear)
         self.decoder = Decoder(input_dim=input_dim, hidden_dim=self.hidden_dim, c_dim=c_dim, non_linear=non_linear) 
         self.optimizer = torch.optim.Adam(list(self.encoder.parameters()) + list(self.decoder.parameters()), lr=learning_rate) 
@@ -140,6 +157,9 @@ class cVAE(nn.Module):
     def calc_mse(self, Y, Y_recon):
         return compute_mse(Y, Y_recon)
         
+    def calc_huber_loss(self, Y, Y_recon):
+        return compute_huber_loss(Y, Y_recon, self.delta)
+        
     def forward(self, Y, c):
         mu_z, logvar_z = self.encode(Y, c)
         z = self.reparameterise(mu_z, logvar_z)
@@ -159,7 +179,7 @@ class cVAE(nn.Module):
 
         kl = self.calc_kl(mu_z, logvar_z)
         recon = self.calc_ll(Y, Y_recon)
-
+        
         total = self.beta*kl + recon
         losses = {'Total Loss': total,
                   'KL Divergence': kl,
