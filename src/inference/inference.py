@@ -30,10 +30,8 @@ def run_inference(model, test_data, test_covariates, config):
     model = model.to(device)
     
     try:
-        # Convert to DataFrame since pred_recon expects DataFrame
         test_data = pd.DataFrame(test_data)
         
-        # Get reconstruction variances
         test_recon_var = get_reconstruction_vars(
             model, 
             test_data, 
@@ -41,7 +39,6 @@ def run_inference(model, test_data, test_covariates, config):
             device
         )
         
-        # Save results
         results_dir = Path(config['paths']['output_dir']) / 'results'
         np.savetxt(
             results_dir / 'test_reconstruction_vars.csv', 

@@ -143,6 +143,7 @@ def main():
             config['paths']['data_dir'] = args.data_dir
         if args.output_dir:
             config['paths']['output_dir'] = args.output_dir
+        config['device'] = {}
         config['device']['gpu'] = args.gpu
 
         run_training(args, config)

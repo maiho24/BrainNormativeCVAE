@@ -1,8 +1,10 @@
 import torch
 import torch.utils.data as data
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import logging
 import yaml
 from pathlib import Path
+import pickle
 
 from ..utils.data import MyDataset
 from ..utils.logger import Logger, plot_losses
@@ -10,27 +12,6 @@ from ..models.cvae import cVAE
 
 logger = logging.getLogger(__name__)
 
-def validate_model(model, generator_val, device):
-    """Run validation step."""
-    total_val_loss = 0
-    val_kl_loss = 0
-    val_ll_loss = 0
-    num_batches = 0
-
-    with torch.no_grad():
-        for data_val, cov_val in generator_val:
-            data_val, cov_val = data_val.to(device), cov_val.to(device)
-            fwd_rtn_val = model.forward(data_val, cov_val)
-            val_loss = model.loss_function(data_val, fwd_rtn_val)
-
-            total_val_loss += val_loss['Total Loss'].item()
-            val_kl_loss += val_loss['KL Divergence'].item()
-            val_ll_loss += val_loss['Reconstruction Loss'].item()
-            num_batches += 1
-
-    return (total_val_loss / num_batches,
-            val_kl_loss / num_batches,
-            val_ll_loss / num_batches)
             
 def parse_hidden_dim(hidden_dim):
     """
@@ -53,11 +34,9 @@ def parse_hidden_dim(hidden_dim):
 
 def train_model(train_data, train_covariates, val_data, val_covariates, config):
     """Train the cVAE model with the given configurations."""
-    # Setup device
     device = torch.device("cuda" if config['device']['gpu'] and torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
     
-    # Create datasets and dataloaders
     train_dataset = MyDataset(train_data, train_covariates)
     val_dataset = MyDataset(val_data, val_covariates)
     
@@ -72,7 +51,6 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
         shuffle=False
     )
 
-    # Initialize model
     model = cVAE(
         input_dim=train_data.shape[1],
         hidden_dim=parse_hidden_dim(config['model']['hidden_dim']),
@@ -83,26 +61,31 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
         non_linear=config['model']['non_linear']
     )
     model.to(device)
+    
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        model.optimizer,
+        mode='min',
+        factor=0.5,
+        patience=5,
+        verbose=True,
+        min_lr=1e-6
+    )
 
-    # Initialize logger and training variables
     train_logger = Logger()
-    train_logger.on_train_init(['total_loss', 'KL', 'neg_LL'])
-    train_logger.on_val_init(['total_loss', 'KL', 'neg_LL'])
+    train_logger.on_train_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
+    train_logger.on_val_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
     
     best_loss = float('inf')
     patience_counter = 0
     
-    # Save paths
     models_dir = Path(config['paths']['model_dir'])
     models_dir.mkdir(parents=True, exist_ok=True)
 
-    # Training loop
+    #------ TRAINING & VALIDATION ------#
     for epoch in range(config['training']['epochs']):
         # Training phase
         model.train()
-        total_train_loss = 0
-        total_kl_loss = 0
-        total_ll_loss = 0
+        train_losses = {"Total Loss": 0, "KL Divergence": 0, "Reconstruction Loss": 0}
         num_batches = 0
         
         for batch_data, batch_cov in train_loader:
@@ -114,53 +97,84 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
             
             model.optimizer.zero_grad()
             loss['Total Loss'].backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             model.optimizer.step()
             
-            total_train_loss += loss['Total Loss'].item()
-            total_kl_loss += loss['KL Divergence'].item()
-            total_ll_loss += loss['Reconstruction Loss'].item()
+            train_losses["Total Loss"] += loss['Total Loss'].item()
+            train_losses["KL Divergence"] += loss['KL Divergence'].item()
+            train_losses["Reconstruction Loss"] += loss['Reconstruction Loss'].item()
             num_batches += 1
 
-        # Calculate average training losses
-        avg_train_loss = total_train_loss / num_batches
-        avg_kl_loss = total_kl_loss / num_batches
-        avg_ll_loss = total_ll_loss / num_batches
-
+        avg_train_losses = {k: v/num_batches for k, v in train_losses.items()}
+        current_train_loss = avg_train_losses["Total Loss"]
+        
         # Validation phase
         model.eval()
-        avg_val_loss, avg_val_kl_loss, avg_val_ll_loss = validate_model(
-            model, val_loader, device
-        )
+        val_losses = {"Total Loss": 0, "KL Divergence": 0, "Reconstruction Loss": 0}
+        num_val_batches = 0
+        
+        with torch.no_grad():
+            for batch_data, batch_cov in val_loader:
+                batch_data = batch_data.to(device)
+                batch_cov = batch_cov.to(device)
+                
+                fwd_rtn = model.forward(batch_data, batch_cov)
+                loss = model.loss_function(batch_data, fwd_rtn)
+                
+                val_losses["Total Loss"] += loss['Total Loss'].item()
+                val_losses["KL Divergence"] += loss['KL Divergence'].item()
+                val_losses["Reconstruction Loss"] += loss['Reconstruction Loss'].item()
+                num_val_batches += 1
+        
+        avg_val_losses = {k: v/num_val_batches for k, v in val_losses.items()}
+        current_val_loss = avg_val_losses["Total Loss"]
+        scheduler.step(current_val_loss)
 
         # Early stopping check
-        if avg_val_loss < best_loss:
-            best_loss = avg_val_loss
-            best_model = model.state_dict()
+        if current_val_loss < best_loss:
+            best_loss = current_val_loss
             patience_counter = 0
+            checkpoint = {
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': model.optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'epoch': epoch,
+                'loss': best_loss
+            }
+            best_checkpoint_path = models_dir / "best_model_checkpoint.pt"
+            torch.save(checkpoint, best_checkpoint_path)
             logger.info(f'Epoch {epoch}: New best model saved')
+            
+            logger_path = models_dir / "training_logger.pkl"
+            with open(logger_path, 'wb') as f:
+                pickle.dump(train_logger, f)
         else:
             patience_counter += 1
             if patience_counter >= config['training']['early_stopping_patience']:
                 logger.info(f"Early stopping triggered at epoch {epoch}")
                 break
 
-        # Log losses
-        train_logger.on_train_step({
-            'total_loss': avg_train_loss,
-            'KL': avg_kl_loss,
-            'neg_LL': avg_ll_loss
-        })
-        train_logger.on_val_step({
-            'total_loss': avg_val_loss,
-            'KL': avg_val_kl_loss,
-            'neg_LL': avg_val_ll_loss
-        })
+        train_logger.on_train_step(avg_train_losses)
+        train_logger.on_val_step(avg_val_losses)
 
-        logger.info(f"Epoch {epoch}: Train Loss = {avg_train_loss:.4f}, Val Loss = {avg_val_loss:.4f}")
+        logger.info(
+            f"Epoch {epoch}: "
+            f"Train Loss = {avg_train_losses['Total Loss']:.4f} "
+            f"(KL: {avg_train_losses['KL Divergence']:.4f}, "
+            f"NegLogLik: {avg_train_losses['Reconstruction Loss']:.4f}), "
+            f"Val Loss = {avg_val_losses['Total Loss']:.4f} "
+            f"(KL: {avg_val_losses['KL Divergence']:.4f}, "
+            f"NegLogLik: {avg_val_losses['Reconstruction Loss']:.4f})"
+        )
 
-    # Plot and save training curves
     plot_losses(train_logger, models_dir, '_training_validation')
     
-    # Load and return best model
-    model.load_state_dict(best_model)
+    best_checkpoint_path = models_dir / f"best_model_checkpoint.pt"
+    if best_checkpoint_path.exists():
+        checkpoint = torch.load(best_checkpoint_path, map_location=device)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        logger.info(f"Loaded best model with validation loss: {checkpoint['loss']}")
+    else:
+        logger.warning("No best model checkpoint found. Returning the final model state.")
+        
     return model

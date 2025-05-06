@@ -29,7 +29,7 @@ def setup_package():
         author='Mai Ho',
         author_email='mai.ho@unsw.edu.au',
         url='https://github.com/maiho24/BrainNormativeCVAE',
-        python_requires='>=3.8',
+        python_requires='==3.9',
         entry_points={
             'console_scripts': [
                 'brain-cvae-train=scripts.train_model:main',

@@ -95,10 +95,13 @@ class Decoder(nn.Module):
         
         self.decoder_layers = nn.Sequential(*lin_layers[0:-1])
         self.decoder_mean_layer = nn.Linear(self.layer_sizes_decoder[-2],self.layer_sizes_decoder[-1], bias=True)
-        tmp_noise_par = torch.FloatTensor(1, self.input_size).fill_(self.init_logvar)
-        self.logvar_out = Parameter(data=tmp_noise_par, requires_grad=True)
-
-
+        #tmp_noise_par = torch.FloatTensor(1, self.input_size).fill_(self.init_logvar)
+        #self.logvar_out = Parameter(data=tmp_noise_par, requires_grad=True)
+        self.decoder_logvar_layer = nn.Linear(self.layer_sizes_decoder[-2], self.layer_sizes_decoder[-1], bias=True)
+        # Initialize logvar layer weights to produce initial logvar close to init_logvar
+        nn.init.constant_(self.decoder_logvar_layer.bias, self.init_logvar)
+        nn.init.xavier_uniform_(self.decoder_logvar_layer.weight)
+        
     def forward(self, z, c):
         c = c.reshape(-1, self.c_dim)
         conditional_z = torch.cat((z, c), dim=1)
@@ -107,13 +110,27 @@ class Decoder(nn.Module):
             if self.non_linear:
                 conditional_z = F.relu(conditional_z)
 
-        mu_out = self.decoder_mean_layer(conditional_z) 
-        logvar_out = torch.clamp(self.logvar_out, min=-10.0, max=10.0)
-        scale = torch.exp(0.5 * logvar_out).expand_as(mu_out)
-        scale = scale + 1e-6
-        mu_out = torch.clamp(mu_out, min=-1e6, max=1e6)
-        return Normal(loc=mu_out, scale=scale)
-
+        mu_out = self.decoder_mean_layer(conditional_z)
+        if torch.isnan(mu_out).any():
+            mu_out = torch.where(torch.isnan(mu_out), torch.zeros_like(mu_out), mu_out)
+        mu_out = torch.clamp(mu_out, min=-10.0, max=10.0)
+        
+        #logvar_out = self.logvar_out
+        logvar_out = self.decoder_logvar_layer(conditional_z)
+        if torch.isnan(logvar_out).any():
+            logvar_out = torch.where(torch.isnan(logvar_out), torch.full_like(logvar_out, -3.0), logvar_out)
+        #logvar_out = torch.clamp(logvar_out, min=-10.0, max=10.0)
+        
+        #scale = torch.exp(0.5 * logvar_out).expand_as(mu_out) + 1e-6
+        scale = torch.exp(0.5 * logvar_out) + 1e-6
+        
+        try:
+            return Normal(loc=mu_out, scale=scale)
+        except ValueError as e:
+            print(f"Error creating Normal distribution: {e}")
+            safe_mu = torch.zeros_like(mu_out)
+            safe_scale = torch.ones_like(scale)
+            return Normal(loc=safe_mu, scale=safe_scale)
 
 class cVAE(nn.Module):
     def __init__(self, 
@@ -141,9 +158,24 @@ class cVAE(nn.Module):
         return self.encoder(Y, c)
 
     def reparameterise(self, mu, logvar):
-        std = torch.exp(0.5*logvar)
+        if torch.isnan(mu).any() or torch.isnan(logvar).any():
+            mu = torch.where(torch.isnan(mu), torch.zeros_like(mu), mu)
+            logvar = torch.where(torch.isnan(logvar), torch.zeros_like(logvar), logvar)
+    
+        mu = torch.clamp(mu, min=-10.0, max=10.0)
+        logvar = torch.clamp(logvar, min=-10.0, max=10.0)
+        
+        std = torch.exp(0.5 * logvar) + 1e-6
+        if torch.isinf(std).any():
+            std = torch.where(torch.isinf(std), torch.ones_like(std), std)
+        
         eps = torch.randn_like(mu)
-        return mu + eps*std
+        z = mu + eps * std
+        
+        if torch.isnan(z).any():
+            z = torch.where(torch.isnan(z), torch.zeros_like(z), z)
+            
+        return z
 
     def decode(self, z, c):
         return self.decoder(z, c)
@@ -179,8 +211,9 @@ class cVAE(nn.Module):
 
         kl = self.calc_kl(mu_z, logvar_z)
         recon = self.calc_ll(Y, Y_recon)
+        var_reg = 0.01 * Y_recon.scale.abs().mean()
         
-        total = self.beta*kl + recon
+        total = self.beta*kl + recon + var_reg
         losses = {'Total Loss': total,
                   'KL Divergence': kl,
                   'Reconstruction Loss': recon}

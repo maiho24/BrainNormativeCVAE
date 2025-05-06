@@ -140,9 +140,6 @@ optuna: # Optional
 paths:
   data_dir: "path/to/data/"
   output_dir: "path/to/output/"
-
-device:
-  gpu: true
 ```
 #### Command Line Arguments
 
@@ -171,12 +168,9 @@ If using a config file, only these sections are required:
 paths:
   data_dir: "path/to/data/"     # Directory containing input data files
   output_dir: "path/to/output/" # Directory for storing results
-
-device:
-  gpu: false                    # Whether to use GPU for inference
 ```
 
-Note: Command line arguments (`--data_dir`, `--output_dir`, `--gpu`) will override the corresponding values in the config file if both are provided.
+Note: Command line arguments (`--data_dir`, `--output_dir`) will override the corresponding values in the config file if both are provided.
 
 #### Command Line Arguments
 

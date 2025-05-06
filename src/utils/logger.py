@@ -18,26 +18,28 @@ class Logger:
 
     def on_train_step(self, logs_dict):
         for k, v in logs_dict.items():
+            value = float(v) if hasattr(v, 'item') else v
             self.logs[k].append(v)
 
     def on_val_step(self, logs_dict):
         for k, v in logs_dict.items():
+            value = float(v) if hasattr(v, 'item') else v
             self.val_logs[k].append(v)
 
 
 def plot_losses(logger, path, title=''):
-    """Plot training and validation losses."""
     plt.figure(figsize=(10, 6))
-
+    
     # Plot Training Losses
     plt.subplot(1, 2, 1)
     plt.title('Training Loss Values')
     for k, v in logger.logs.items():
         plt.plot(v, label=str(k))
     plt.xlabel('Epochs', fontsize=10)
-    plt.ylabel('Loss', fontsize=10)
-
-    # Plot Validation Losses
+    plt.ylabel('Average Loss', fontsize=10)
+    plt.legend()
+    
+    # Plot Validation Losses  
     plt.subplot(1, 2, 2)
     plt.title('Validation Loss Values')
     for k, v in logger.val_logs.items():
@@ -45,7 +47,7 @@ def plot_losses(logger, path, title=''):
     plt.xlabel('Epochs', fontsize=10)
     plt.ylabel('Average Loss', fontsize=10)
     plt.legend()
-
+    
     plt.tight_layout()
     save_path = Path(path) / f"Losses{title}.png"
     plt.savefig(save_path)

@@ -68,6 +68,13 @@ def create_parser():
     )
     
     parser.add_argument(
+        '--batch_size', 
+        type=int, 
+        default=16,
+        help='Batch size for bootstrapping (default: 16)'
+    )
+    
+    parser.add_argument(
         '--prediction_type',
         type=str,
         choices=['covariate', 'dual_input'],
@@ -98,6 +105,11 @@ def create_default_config(args):
         },
         'device': {
             'gpu': args.gpu
+        },
+        'inference': {
+            'num_samples': args.num_samples,
+            'num_bootstraps': args.num_bootstraps,
+            'batch_size': args.batch_size
         }
     }
     
@@ -144,8 +156,9 @@ def run_inference(args, config):
                 covariates_df=test_covariates_raw,
                 feature_cols=feature_cols,
                 config=config,
-                num_samples=args.num_samples,
-                num_bootstraps=args.num_bootstraps
+                num_samples=config['inference']['num_samples'],
+                num_bootstraps=config['inference']['num_bootstraps'],
+                batch_size=config['inference']['batch_size']
             )
         else:  # dual_input
             logger.info("Starting dual-input predictions...")
@@ -156,8 +169,9 @@ def run_inference(args, config):
                 covariates_raw=test_covariates_raw,
                 feature_cols=feature_cols,
                 config=config,
-                num_samples=args.num_samples,
-                num_bootstraps=args.num_bootstraps
+                num_samples=config['inference']['num_samples'],
+                num_bootstraps=config['inference']['num_bootstraps'],
+                batch_size=config['inference']['batch_size']
             )
             
         logger.info(f"Computing feature importance for {args.prediction_type} predictions...")
@@ -166,7 +180,6 @@ def run_inference(args, config):
             covariates_df=test_covariates_raw,
             feature_cols=feature_cols,
             config=config,
-            prediction_type=args.prediction_type
         )
         
         logger.info(f"Generating summary statistics for {args.prediction_type} predictions...")
@@ -174,7 +187,6 @@ def run_inference(args, config):
             bootstrap_results=results,
             feature_cols=feature_cols,
             config=config,
-            prediction_type=args.prediction_type
         )
         
         logger.info("Inference completed successfully")
@@ -191,7 +203,6 @@ def main():
         sys.exit(1)
         
     args = parser.parse_args()
-    
     args = validate_args(args, parser)
 
     if args.config:
@@ -203,8 +214,6 @@ def main():
             config['paths']['output_dir'] = args.output_dir
     else:
         config = create_default_config(args)
-
-    config['device']['gpu'] = args.gpu
     
     run_inference(args, config)
 
