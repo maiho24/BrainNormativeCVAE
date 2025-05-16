@@ -30,6 +30,19 @@ class Logger:
 def plot_losses(logger, path, title=''):
     plt.figure(figsize=(10, 6))
     
+    # Find the global min and max across all losses for consistent y-axis
+    all_values = []
+    for v in logger.logs.values():
+        all_values.extend(v)
+    for v in logger.val_logs.values():
+        all_values.extend(v)
+    
+    if all_values:  # Only if we have data
+        y_min = min(all_values) * 0.95  # Add 5% padding
+        y_max = max(all_values) * 1.05  # Add 5% padding
+    else:
+        y_min, y_max = 0, 1
+        
     # Plot Training Losses
     plt.subplot(1, 2, 1)
     plt.title('Training Loss Values')
@@ -37,7 +50,7 @@ def plot_losses(logger, path, title=''):
         plt.plot(v, label=str(k))
     plt.xlabel('Epochs', fontsize=10)
     plt.ylabel('Average Loss', fontsize=10)
-    plt.legend()
+    plt.ylim(y_min, y_max)
     
     # Plot Validation Losses  
     plt.subplot(1, 2, 2)
@@ -46,6 +59,7 @@ def plot_losses(logger, path, title=''):
         plt.plot(v, label=str(k))
     plt.xlabel('Epochs', fontsize=10)
     plt.ylabel('Average Loss', fontsize=10)
+    plt.ylim(y_min, y_max)
     plt.legend()
     
     plt.tight_layout()

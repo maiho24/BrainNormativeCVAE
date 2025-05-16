@@ -68,13 +68,6 @@ def create_parser():
     )
     
     parser.add_argument(
-        '--batch_size', 
-        type=int, 
-        default=16,
-        help='Batch size for bootstrapping (default: 16)'
-    )
-    
-    parser.add_argument(
         '--prediction_type',
         type=str,
         choices=['covariate', 'dual_input'],
@@ -108,8 +101,7 @@ def create_default_config(args):
         },
         'inference': {
             'num_samples': args.num_samples,
-            'num_bootstraps': args.num_bootstraps,
-            'batch_size': args.batch_size
+            'num_bootstraps': args.num_bootstraps
         }
     }
     
@@ -157,8 +149,7 @@ def run_inference(args, config):
                 feature_cols=feature_cols,
                 config=config,
                 num_samples=config['inference']['num_samples'],
-                num_bootstraps=config['inference']['num_bootstraps'],
-                batch_size=config['inference']['batch_size']
+                num_bootstraps=config['inference']['num_bootstraps']
             )
         else:  # dual_input
             logger.info("Starting dual-input predictions...")
@@ -170,8 +161,7 @@ def run_inference(args, config):
                 feature_cols=feature_cols,
                 config=config,
                 num_samples=config['inference']['num_samples'],
-                num_bootstraps=config['inference']['num_bootstraps'],
-                batch_size=config['inference']['batch_size']
+                num_bootstraps=config['inference']['num_bootstraps']
             )
             
         logger.info(f"Computing feature importance for {args.prediction_type} predictions...")

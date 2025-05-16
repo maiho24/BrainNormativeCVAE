@@ -47,7 +47,7 @@ class OptunaTrainer:
             interval_steps=1
         )
         
-        sampler = optuna.samplers.TPESampler(seed=config.get('seed', 42))
+        sampler = optuna.samplers.TPESampler(seed=self.config.get('seed', 42))
         
         self.study = optuna.create_study(
             study_name=self.config['optuna']['study_name'],
@@ -161,34 +161,57 @@ class OptunaTrainer:
             log=True)
         batch_size = trial.suggest_categorical('batch_size',
             self.config['optuna']['search_space']['batch_size']['choices'])
-        beta = trial.suggest_categorical('beta',
-            self.config['optuna']['search_space']['beta']['choices'])
+            
+        if 'beta' in self.config['optuna']['search_space']:
+            beta = trial.suggest_categorical('beta', self.config['optuna']['search_space']['beta']['choices'])
+        else:
+            beta = 1
         
-        # Create model with suggested parameters
+        variance_type = self.config['model'].get('variance_type', 'global_learnable')
+        if variance_type == "covariate_specific":
+            # Check if varnet_hidden_dim is in the search space
+            if 'varnet_hidden_dim' in self.config['optuna']['search_space']:
+                varnet_hidden_dim_str = trial.suggest_categorical('varnet_hidden_dim',
+                    self.config['optuna']['search_space']['varnet_hidden_dim']['choices'])
+                varnet_hidden_dim = self._parse_hidden_dim(varnet_hidden_dim_str)
+            else:
+                # Use default value of [32] if not in search space
+                varnet_hidden_dim = [32]
+        else:
+            varnet_hidden_dim = None
+        
+        # Create model with suggested parameters    
         model = cVAE(
             input_dim=self.train_data.shape[1],
             hidden_dim=hidden_dim,
             latent_dim=latent_dim,
             c_dim=self.train_covariates.shape[1],
-            learning_rate=learning_rate,
             beta=beta,
-            non_linear=self.config['model']['non_linear']
+            non_linear=self.config['model']['non_linear'],
+            variance_type=variance_type,
+            variance_network_hidden_dim=varnet_hidden_dim
         )
-        return model, batch_size
+        
+        return model, batch_size, learning_rate
 
     def objective(self, trial):
         """Optuna objective function."""
         device = torch.device(self._get_device_for_trial()) 
         logger.info(f"Trial {trial.number} running on {device}")
 
-        model, batch_size = self.create_model(trial)
+        model, batch_size, learning_rate = self.create_model(trial)
         model = model.to(device)
         
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=learning_rate
+        )
+        
         scheduler = ReduceLROnPlateau(
-            model.optimizer,
+            optimizer,
             mode='min',
             factor=0.5,
-            patience=5,
+            patience=10,
             verbose=True,
             min_lr=1e-6
         )
@@ -233,17 +256,17 @@ class OptunaTrainer:
                 fwd_rtn = model.forward(batch_data, batch_cov)
                 loss = model.loss_function(batch_data, fwd_rtn)
                 
-                model.optimizer.zero_grad()
+                optimizer.zero_grad()
                 loss['Total Loss'].backward()
                 clip_grad_norm_(model.parameters(), max_norm=1.0)
-                model.optimizer.step()
+                optimizer.step()
                 
                 train_losses["Total Loss"] += loss['Total Loss'].item()
                 train_losses["KL Divergence"] += loss['KL Divergence'].item()
                 train_losses["Reconstruction Loss"] += loss['Reconstruction Loss'].item()
                 num_batches += 1
             
-            current_lr = model.optimizer.param_groups[0]['lr']
+            current_lr = optimizer.param_groups[0]['lr']
             avg_losses = {k: v/num_batches for k, v in train_losses.items()}
 
             # Validation phase
@@ -276,7 +299,7 @@ class OptunaTrainer:
                 
                 checkpoint = {
                     'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': model.optimizer.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': scheduler.state_dict(),
                     'trial_number': trial.number,
                     'loss': best_val_loss
@@ -360,10 +383,20 @@ class OptunaTrainer:
                 'hidden_dim': best_params['hidden_dim'],
                 'latent_dim': best_params['latent_dim'],
                 'learning_rate': best_params['learning_rate'],
-                'beta': best_params['beta']
+                'beta': best_params.get('beta', 1)
             })
             train_config['training']['batch_size'] = best_params['batch_size']
+            if 'varnet_hidden_dim' in best_params:
+                train_config['model']['varnet_hidden_dim'] = best_params['varnet_hidden_dim']
+            elif train_config['model'].get('variance_type') == 'covariate_specific':
+                train_config['model']['varnet_hidden_dim'] = '32'
             
+            best_config_file = model_dir / 'best_training_config.yaml'
+            with open(best_config_file, 'w') as f:
+                yaml.dump(train_config, f)
+            logger.info(f"Saved configuration with best params to {best_config_file}")
+            
+            # Retrain model with best params
             logger.info("Retraining model with best parameters...")
             final_model = train_model(
                 self.train_data,

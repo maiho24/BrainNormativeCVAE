@@ -18,7 +18,7 @@ class MyDataset(Dataset):
             self.N = len(self.data)
             self.shape = np.shape(self.data)
             
-        self.labels = torch.from_numpy(self.labels).long()
+        self.labels = torch.from_numpy(self.labels).float()
         self.transform = transform
         self.indices = indices
 

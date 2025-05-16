@@ -8,7 +8,7 @@ import pickle
 
 from ..utils.data import MyDataset
 from ..utils.logger import Logger, plot_losses
-from ..models.cvae import cVAE
+from ..models.cvae import cVAE, VarianceType
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,6 @@ def parse_hidden_dim(hidden_dim):
 def train_model(train_data, train_covariates, val_data, val_covariates, config):
     """Train the cVAE model with the given configurations."""
     device = torch.device("cuda" if config['device']['gpu'] and torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
     
     train_dataset = MyDataset(train_data, train_covariates)
     val_dataset = MyDataset(val_data, val_covariates)
@@ -50,23 +49,36 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
         batch_size=config['training']['batch_size'],
         shuffle=False
     )
-
+    
+    variance_type = config['model'].get('variance_type', 'global_learnable')
+    
+    if variance_type == "covariate_specific":
+        varnet_hidden_dim = parse_hidden_dim(config['model']['varnet_hidden_dim'])
+    else:
+        varnet_hidden_dim = None
+    
     model = cVAE(
         input_dim=train_data.shape[1],
         hidden_dim=parse_hidden_dim(config['model']['hidden_dim']),
         latent_dim=config['model']['latent_dim'],
         c_dim=train_covariates.shape[1],
-        learning_rate=config['model']['learning_rate'],
-        beta=config['model']['beta'],
-        non_linear=config['model']['non_linear']
+        beta=config['model'].get('beta', 1),
+        non_linear=config['model']['non_linear'],
+        variance_type=variance_type,
+        variance_network_hidden_dim=varnet_hidden_dim
     )
     model.to(device)
     
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config['model']['learning_rate']
+    )
+    
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        model.optimizer,
+        optimizer,
         mode='min',
         factor=0.5,
-        patience=5,
+        patience=10,
         verbose=True,
         min_lr=1e-6
     )
@@ -95,10 +107,10 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
             fwd_rtn = model.forward(batch_data, batch_cov)
             loss = model.loss_function(batch_data, fwd_rtn)
             
-            model.optimizer.zero_grad()
+            optimizer.zero_grad()
             loss['Total Loss'].backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            model.optimizer.step()
+            optimizer.step()
             
             train_losses["Total Loss"] += loss['Total Loss'].item()
             train_losses["KL Divergence"] += loss['KL Divergence'].item()
@@ -136,7 +148,7 @@ def train_model(train_data, train_covariates, val_data, val_covariates, config):
             patience_counter = 0
             checkpoint = {
                 'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': model.optimizer.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
                 'scheduler_state_dict': scheduler.state_dict(),
                 'epoch': epoch,
                 'loss': best_loss
