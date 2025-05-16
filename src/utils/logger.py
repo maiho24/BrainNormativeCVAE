@@ -37,9 +37,9 @@ def plot_losses(logger, path, title=''):
     for v in logger.val_logs.values():
         all_values.extend(v)
     
-    if all_values:  # Only if we have data
-        y_min = min(all_values) * 0.95  # Add 5% padding
-        y_max = max(all_values) * 1.05  # Add 5% padding
+    if all_values:
+        y_min = min(all_values) - 5
+        y_max = max(all_values) + 5
     else:
         y_min, y_max = 0, 1
         
