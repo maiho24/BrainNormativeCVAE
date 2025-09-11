@@ -38,7 +38,6 @@ def generate_simple_stats_by_covariates(model, covariates, covariates_df, featur
             
             # Generate K iterations to get mu_k and sigma_k from model output distributions
             for k in range(num_iterations):
-                # Generate one latent sample
                 z = torch.randn(1, model.latent_dim, device=device)
                 covariate_expanded = covariate.unsqueeze(0)
                 
@@ -270,47 +269,54 @@ def generate_bootstrap_stats_by_covariates(model, covariates, covariates_df, fea
         logger.info(f"Using {num_bootstraps} bootstrap samples with {num_samples} samples each")
         
         for idx, covariate in enumerate(covariates_tensor):
-            # Generate base samples for bootstrapping
-            z = torch.randn(num_samples, model.latent_dim, device=device)
-            covariate_expanded = covariate.unsqueeze(0).expand(num_samples, -1)
+            # For each bootstrap iteration, collect the statistics
+            bootstrap_means = []
+            bootstrap_variances = []
             
-            with torch.no_grad():
-                # Sample from the output distributions
-                samples = model.decode(z, covariate_expanded).sample().cpu().numpy()
+            for b in range(num_bootstraps):
+                # Generate fresh samples for this bootstrap iteration
+                mu_k_values = []
+                sigma_k_values = []
+                
+                for s in range(num_samples):
+                    # Generate a NEW latent sample for each sample
+                    z = torch.randn(1, model.latent_dim, device=device)
+                    covariate_expanded = covariate.unsqueeze(0)
+                    
+                    with torch.no_grad():
+                        output_dist = model.decode(z, covariate_expanded)
+                        mu_k = output_dist.loc.squeeze(0).cpu().numpy()
+                        sigma_k = output_dist.scale.pow(2).squeeze(0).cpu().numpy()
+                    
+                    mu_k_values.append(mu_k)
+                    sigma_k_values.append(sigma_k)
+                
+                # Calculate statistics for this bootstrap iteration
+                mu_k_array = np.array(mu_k_values)
+                sigma_k_array = np.array(sigma_k_values)
+                
+                bootstrap_mean = np.mean(mu_k_array, axis=0)
+                bootstrap_var = np.mean(sigma_k_array, axis=0)
+                
+                bootstrap_means.append(bootstrap_mean)
+                bootstrap_variances.append(bootstrap_var)
             
-            # Generate bootstrap indices
-            bootstrap_indices = np.random.choice(
-                num_samples, 
-                size=(num_bootstraps, num_samples), 
-                replace=True
-            )
+            # Convert to arrays for easier manipulation
+            bootstrap_means = np.array(bootstrap_means)          # Shape: (num_bootstraps, num_features)
+            bootstrap_variances = np.array(bootstrap_variances)  # Shape: (num_bootstraps, num_features)
             
-            # Calculate bootstrap statistics
-            bootstrap_means = np.zeros((num_bootstraps, samples.shape[1]))
-            bootstrap_variances = np.zeros((num_bootstraps, samples.shape[1]))
-            
-            # For each bootstrap sample, compute mu_k and sigma_k
-            for i in range(num_bootstraps):
-                bootstrap_sample = samples[bootstrap_indices[i]]
-                bootstrap_means[i] = np.mean(bootstrap_sample, axis=0)     # mu_k
-                bootstrap_variances[i] = np.var(bootstrap_sample, axis=0)  # sigma_k
-            
-            # Apply the total variance formula
+            # Calculate overall statistics across all bootstraps
             overall_mean = np.mean(bootstrap_means, axis=0)  # mu bar
-            within_variance = np.mean(bootstrap_variances, axis=0)  # (1/K)sum(sigma_k)
-            between_variance = np.var(bootstrap_means, axis=0)      # (1/K)sum((mu_k - mu_bar)^2)
+            within_variance = np.mean(bootstrap_variances, axis=0)  # average sigma_k
+            between_variance = np.var(bootstrap_means, axis=0)  # variance of means
             total_variance = within_variance + between_variance
             
             # Calculate confidence intervals
             ci_means = np.percentile(bootstrap_means, [lower_percentile, upper_percentile], axis=0)
             ci_variances = np.percentile(bootstrap_variances, [lower_percentile, upper_percentile], axis=0)
             
-            # Calculate confidence intervals for total variance
-            bootstrap_total_variances = np.zeros((num_bootstraps, samples.shape[1]))
-            for i in range(num_bootstraps):
-                bootstrap_total_variances[i] = bootstrap_variances[i] + \
-                    (bootstrap_means[i] - overall_mean)**2
-            
+            # Calculate total variance for each bootstrap and get CIs
+            bootstrap_total_variances = bootstrap_variances + (bootstrap_means - overall_mean)**2
             ci_total_variances = np.percentile(bootstrap_total_variances, [lower_percentile, upper_percentile], axis=0)
             
             # Store results

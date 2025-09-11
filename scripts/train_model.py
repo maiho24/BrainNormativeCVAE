@@ -11,11 +11,13 @@ def create_parser():
         
         This script trains a conditional Variational Autoencoder (cVAE) for normative modeling 
         of brain imaging data. It supports both direct training with specified parameters and 
-        hyperparameter optimization using Optuna.
+        hyperparameter optimization using Optuna. When using Optuna mode, k-fold cross-validation
+        can be enabled for more robust hyperparameter selection.
         
         Example usage:
           brain-cvae-train --config configs/my_config.yaml --mode direct --gpu
           brain-cvae-train --config configs/optuna_config.yaml --mode optuna
+          brain-cvae-train --config configs/optuna_cv_config.yaml --mode optuna  # with cross-validation
         """,
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -46,7 +48,7 @@ def create_parser():
         default='direct',
         help='''Training mode:
         direct: Train with parameters specified in config file
-        optuna: Perform hyperparameter optimization (default: direct)'''
+        optuna: Perform hyperparameter optimization with optional k-fold CV (default: direct)'''
     )
     
     parser.add_argument(
@@ -97,7 +99,15 @@ def run_training(args, config):
         logger.info(f"Using device: {device}")
 
         if args.mode == 'optuna':
-            logger.info("Starting Optuna hyperparameter optimization...")
+            # Check if cross-validation is enabled
+            cv_enabled = config.get('cross_validation', {}).get('enabled', False)
+            if cv_enabled:
+                cv_folds = config.get('cross_validation', {}).get('n_folds', 5)
+                cv_type = "stratified" if config.get('cross_validation', {}).get('stratified', False) else "standard"
+                logger.info(f"Starting Optuna hyperparameter optimisation with {cv_folds}-fold {cv_type} cross-validation...")
+            else:
+                logger.info("Starting Optuna hyperparameter optimisation...")
+                
             trainer = OptunaTrainer(
                 train_data=train_data,
                 train_covariates=train_covariates,

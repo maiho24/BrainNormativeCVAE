@@ -38,13 +38,6 @@ def compute_mse(Y, Y_recon):
     return ((Y - Y_recon_mean)**2).mean()
 
 def compute_huber_loss(Y, Y_recon, delta=1.0):
-    """
-    Compute Huber loss between target Y and reconstructed Y_recon
-    Args:
-        Y: target values
-        Y_recon: Normal distribution of reconstructed values
-        delta: threshold parameter for Huber loss (default: 1.0)
-    """
     Y_recon_mean = Y_recon.loc
     diff = Y - Y_recon_mean
     abs_diff = torch.abs(diff)
@@ -98,7 +91,7 @@ class FlexibleDecoder(nn.Module):
                 c_dim,
                 variance_type=VarianceType.TWO_HEADS,
                 non_linear=True, 
-                init_logvar=-3.0,
+                init_logvar=-0.5,
                 variance_network_hidden_dim=[32]):
         super().__init__()
         self.input_size = input_dim
@@ -184,7 +177,7 @@ class FlexibleDecoder(nn.Module):
         if torch.isnan(logvar_out).any():
             logvar_out = torch.where(torch.isnan(logvar_out), torch.full_like(logvar_out, self.init_logvar), logvar_out)
         
-        logvar_out = torch.clamp(logvar_out, min=-10.0, max=5.0)
+        # logvar_out = torch.clamp(logvar_out, min=-10.0, max=10.0)
         
         scale = torch.exp(0.5 * logvar_out) + 1e-6
         
@@ -207,7 +200,7 @@ class cVAE(nn.Module):
                 non_linear=True,
                 variance_type="global_learnable",  # Can be "global_learnable", "covariate_specific" or "two_heads"
                 variance_network_hidden_dim=[32],
-                init_logvar=-3.0):
+                init_logvar=-0.5):
         
         super().__init__()
         self.input_dim = input_dim
@@ -245,8 +238,8 @@ class cVAE(nn.Module):
             mu = torch.where(torch.isnan(mu), torch.zeros_like(mu), mu)
             logvar = torch.where(torch.isnan(logvar), torch.zeros_like(logvar), logvar)
     
-        mu = torch.clamp(mu, min=-10.0, max=10.0)
-        logvar = torch.clamp(logvar, min=-10.0, max=10.0)
+        # mu = torch.clamp(mu, min=-10.0, max=10.0)
+        # logvar = torch.clamp(logvar, min=-10.0, max=10.0)
         
         std = torch.exp(0.5 * logvar) + 1e-6
         if torch.isinf(std).any():

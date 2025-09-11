@@ -4,6 +4,7 @@ import torch
 import torch.utils.data as data
 from torch.nn.utils import clip_grad_norm_
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+from sklearn.model_selection import KFold, StratifiedKFold
 from pathlib import Path
 import logging
 import yaml
@@ -26,8 +27,8 @@ class OptunaTrainer:
         Args:
             train_data: Training data numpy array
             train_covariates: Training covariates numpy array
-            val_data: Validation data numpy array
-            val_covariates: Validation covariates numpy array
+            val_data: Validation data numpy array (used only if cross_validation is False)
+            val_covariates: Validation covariates numpy array (used only if cross_validation is False)
             config: Configuration dictionary
         """
         self.train_data = train_data
@@ -36,6 +37,20 @@ class OptunaTrainer:
         self.val_covariates = val_covariates
         self.config = config
         self.best_trial_logger = None
+        
+        # Cross-validation settings
+        self.use_cv = config.get('cross_validation', {}).get('enabled', False)
+        self.cv_folds = config.get('cross_validation', {}).get('n_folds', 5)
+        self.cv_stratified = config.get('cross_validation', {}).get('stratified', False)
+        self.cv_random_state = config.get('cross_validation', {}).get('random_state', 42)
+        
+        if self.use_cv:
+            logger.info(f"Cross-validation enabled: {self.cv_folds}-fold {'stratified' if self.cv_stratified else 'standard'} CV")
+            # Combine train and val data for cross-validation
+            self.full_data = np.vstack([self.train_data, self.val_data])
+            self.full_covariates = np.vstack([self.train_covariates, self.val_covariates])
+        else:
+            logger.info("Cross-validation disabled: using standard train/validation split")
         
         storage = self.config['optuna'].get('storage', None)
         cores_per_trial = self.config.get('optuna', {}).get('cores_per_trial', 1)
@@ -147,6 +162,34 @@ class OptunaTrainer:
             logger.error(f"Error parsing hidden dimensions {hidden_dim_str}: {str(e)}")
             raise ValueError(f"Invalid hidden dimension format: {hidden_dim_str}. Expected format: 'dim1_dim2' or 'dim1'")
 
+    def _create_cv_splits(self):
+        """Create cross-validation splits."""
+        if self.cv_stratified:
+            # For stratified CV, we need to create stratification labels
+            # We'll use a simple approach based on covariate combinations
+            stratify_labels = []
+            for cov in self.full_covariates:
+                # Create a hash-based label for stratification
+                # This is a simplified approach - you might want to use specific covariates
+                label = hash(tuple(cov.astype(str))) % 100  # Reduce to manageable number of strata
+                stratify_labels.append(label)
+            
+            cv_splitter = StratifiedKFold(
+                n_splits=self.cv_folds, 
+                shuffle=True, 
+                random_state=self.cv_random_state
+            )
+            splits = cv_splitter.split(self.full_data, stratify_labels)
+        else:
+            cv_splitter = KFold(
+                n_splits=self.cv_folds, 
+                shuffle=True, 
+                random_state=self.cv_random_state
+            )
+            splits = cv_splitter.split(self.full_data)
+        
+        return list(splits)
+
     def create_model(self, trial):
         """Create model with parameters suggested by Optuna."""
         # Suggest hyperparameters
@@ -194,13 +237,13 @@ class OptunaTrainer:
         
         return model, batch_size, learning_rate
 
-    def objective(self, trial):
-        """Optuna objective function."""
-        device = torch.device(self._get_device_for_trial()) 
-        logger.info(f"Trial {trial.number} running on {device}")
-
-        model, batch_size, learning_rate = self.create_model(trial)
-        model = model.to(device)
+    def _train_single_fold(self, model, train_indices, val_indices, batch_size, learning_rate, device, trial, fold_idx):
+        """Train model on a single fold."""
+        # Create fold-specific data
+        fold_train_data = self.full_data[train_indices]
+        fold_train_covariates = self.full_covariates[train_indices]
+        fold_val_data = self.full_data[val_indices]
+        fold_val_covariates = self.full_covariates[val_indices]
         
         optimizer = torch.optim.Adam(
             model.parameters(),
@@ -212,12 +255,12 @@ class OptunaTrainer:
             mode='min',
             factor=0.5,
             patience=10,
-            verbose=True,
+            verbose=False,  # Reduce verbosity for CV
             min_lr=1e-6
         )
         
-        train_dataset = MyDataset(self.train_data, self.train_covariates)
-        val_dataset = MyDataset(self.val_data, self.val_covariates)
+        train_dataset = MyDataset(fold_train_data, fold_train_covariates)
+        val_dataset = MyDataset(fold_val_data, fold_val_covariates)
         
         train_loader = data.DataLoader(
             train_dataset, 
@@ -234,16 +277,15 @@ class OptunaTrainer:
 
         best_val_loss = float('inf')
         patience_counter = 0
-        logger_trial = Logger()
-        logger_trial.on_train_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
-        logger_trial.on_val_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
+        fold_logger = Logger()
+        fold_logger.on_train_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
+        fold_logger.on_val_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
         
-        model_dir = Path(self.config['paths']['model_dir'])
-        checkpoint_dir = model_dir / 'checkpoints'
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        max_epochs = self.config['training']['epochs']
+        early_stopping_patience = self.config['training']['early_stopping_patience']
         
-        #------ TRAINING & VALIDATION ------#
-        for epoch in range(self.config['training']['epochs']):
+        #------ TRAINING & VALIDATION FOR THIS FOLD ------#
+        for epoch in range(max_epochs):
             # Training phase
             model.train()
             train_losses = {"Total Loss": 0, "KL Divergence": 0, "Reconstruction Loss": 0}
@@ -266,7 +308,6 @@ class OptunaTrainer:
                 train_losses["Reconstruction Loss"] += loss['Reconstruction Loss'].item()
                 num_batches += 1
             
-            current_lr = optimizer.param_groups[0]['lr']
             avg_losses = {k: v/num_batches for k, v in train_losses.items()}
 
             # Validation phase
@@ -295,39 +336,222 @@ class OptunaTrainer:
             if current_val_loss < best_val_loss:
                 best_val_loss = current_val_loss
                 patience_counter = 0
-                self.best_trial_logger = logger_trial
-                
-                checkpoint = {
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'scheduler_state_dict': scheduler.state_dict(),
-                    'trial_number': trial.number,
-                    'loss': best_val_loss
-                }
-                torch.save(checkpoint, checkpoint_dir / f"trial_{trial.number}_checkpoint.pt")
-                logger_path = checkpoint_dir / f"trial_{trial.number}_logger.pkl"
-                with open(logger_path, 'wb') as f:
-                    pickle.dump(logger_trial, f)
             else:
                 patience_counter += 1
-                if patience_counter >= self.config['training']['early_stopping_patience']:
+                if patience_counter >= early_stopping_patience:
                     break
             
-            logger_trial.on_train_step(avg_losses)
-            logger_trial.on_val_step(avg_val_losses)
+            fold_logger.on_train_step(avg_losses)
+            fold_logger.on_val_step(avg_val_losses)
             
-            trial.report(current_val_loss, epoch)
+            # Report to trial for pruning (use average across folds seen so far)
+            trial.report(current_val_loss, epoch + fold_idx * max_epochs)
             if trial.should_prune():
                 raise optuna.exceptions.TrialPruned()
 
-        return best_val_loss
+            pass
+            
+        return best_val_loss, fold_logger
+
+    def objective(self, trial):
+        """Optuna objective function with optional cross-validation."""
+        device = torch.device(self._get_device_for_trial()) 
+        logger.info(f"Trial {trial.number} running on {device}")
+
+        model, batch_size, learning_rate = self.create_model(trial)
+        model = model.to(device)
+        
+        if self.use_cv:
+            # Cross-validation approach
+            cv_splits = self._create_cv_splits()
+            fold_losses = []
+            fold_loggers = []
+            
+            logger.info(f"Trial {trial.number}: Starting {self.cv_folds}-fold cross-validation")
+            
+            for fold_idx, (train_indices, val_indices) in enumerate(cv_splits):
+                logger.info(f"Trial {trial.number}, Fold {fold_idx + 1}/{self.cv_folds}")
+                
+                # Reinitialize model for each fold to ensure fair comparison
+                fold_model, _, _ = self.create_model(trial)
+                fold_model = fold_model.to(device)
+                
+                try:
+                    fold_loss, fold_logger = self._train_single_fold(
+                        fold_model, train_indices, val_indices, batch_size, learning_rate, 
+                        device, trial, fold_idx
+                    )
+                    fold_losses.append(fold_loss)
+                    fold_loggers.append(fold_logger)
+                    
+                except optuna.exceptions.TrialPruned:
+                    logger.info(f"Trial {trial.number} pruned during fold {fold_idx + 1}")
+                    raise
+                
+                logger.info(f"Trial {trial.number}, Fold {fold_idx + 1} completed with loss: {fold_loss:.4f}")
+            
+            # Calculate mean CV score
+            mean_cv_score = np.mean(fold_losses)
+            std_cv_score = np.std(fold_losses)
+            
+            logger.info(f"Trial {trial.number} CV completed: {mean_cv_score:.4f} ± {std_cv_score:.4f}")
+            
+            # Save best trial info if this is the best so far
+            if not hasattr(self, 'best_cv_score') or mean_cv_score < self.best_cv_score:
+                self.best_cv_score = mean_cv_score
+                self.best_trial_logger = fold_loggers[0]  # Save first fold's logger as representative
+                
+                # Save CV results
+                model_dir = Path(self.config['paths']['model_dir'])
+                checkpoint_dir = model_dir / 'checkpoints'
+                checkpoint_dir.mkdir(parents=True, exist_ok=True)
+                
+                cv_results = {
+                    'trial_number': trial.number,
+                    'mean_cv_score': mean_cv_score,
+                    'std_cv_score': std_cv_score,
+                    'fold_scores': fold_losses,
+                    'n_folds': self.cv_folds
+                }
+                
+                cv_results_path = checkpoint_dir / f"trial_{trial.number}_cv_results.pkl"
+                with open(cv_results_path, 'wb') as f:
+                    pickle.dump(cv_results, f)
+                
+                logger_path = checkpoint_dir / f"trial_{trial.number}_logger.pkl"
+                with open(logger_path, 'wb') as f:
+                    pickle.dump(fold_loggers[0], f)
+            
+            return mean_cv_score
+            
+        else:
+            # Standard train/validation approach (existing code)
+            optimizer = torch.optim.Adam(
+                model.parameters(),
+                lr=learning_rate
+            )
+            
+            scheduler = ReduceLROnPlateau(
+                optimizer,
+                mode='min',
+                factor=0.5,
+                patience=10,
+                verbose=True,
+                min_lr=1e-6
+            )
+            
+            train_dataset = MyDataset(self.train_data, self.train_covariates)
+            val_dataset = MyDataset(self.val_data, self.val_covariates)
+            
+            train_loader = data.DataLoader(
+                train_dataset, 
+                batch_size=batch_size, 
+                shuffle=True, 
+                pin_memory=True if device.type == 'cuda' else False
+            )
+            val_loader = data.DataLoader(
+                val_dataset, 
+                batch_size=batch_size, 
+                shuffle=False,
+                pin_memory=True if device.type == 'cuda' else False
+            )
+
+            best_val_loss = float('inf')
+            patience_counter = 0
+            logger_trial = Logger()
+            logger_trial.on_train_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
+            logger_trial.on_val_init(['Total Loss', 'KL Divergence', 'Reconstruction Loss'])
+            
+            model_dir = Path(self.config['paths']['model_dir'])
+            checkpoint_dir = model_dir / 'checkpoints'
+            checkpoint_dir.mkdir(parents=True, exist_ok=True)
+            
+            #------ TRAINING & VALIDATION ------#
+            for epoch in range(self.config['training']['epochs']):
+                # Training phase
+                model.train()
+                train_losses = {"Total Loss": 0, "KL Divergence": 0, "Reconstruction Loss": 0}
+                num_batches = 0
+                
+                for batch_data, batch_cov in train_loader:
+                    batch_data = batch_data.to(device)
+                    batch_cov = batch_cov.to(device)
+                    
+                    fwd_rtn = model.forward(batch_data, batch_cov)
+                    loss = model.loss_function(batch_data, fwd_rtn)
+                    
+                    optimizer.zero_grad()
+                    loss['Total Loss'].backward()
+                    clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    optimizer.step()
+                    
+                    train_losses["Total Loss"] += loss['Total Loss'].item()
+                    train_losses["KL Divergence"] += loss['KL Divergence'].item()
+                    train_losses["Reconstruction Loss"] += loss['Reconstruction Loss'].item()
+                    num_batches += 1
+                
+                avg_losses = {k: v/num_batches for k, v in train_losses.items()}
+
+                # Validation phase
+                model.eval()
+                val_losses = {"Total Loss": 0, "KL Divergence": 0, "Reconstruction Loss": 0}
+                num_val_batches = 0
+                
+                with torch.no_grad():
+                    for batch_data, batch_cov in val_loader:
+                        batch_data = batch_data.to(device)
+                        batch_cov = batch_cov.to(device)
+                        
+                        fwd_rtn = model.forward(batch_data, batch_cov)
+                        loss = model.loss_function(batch_data, fwd_rtn)
+                        
+                        val_losses["Total Loss"] += loss['Total Loss'].item()
+                        val_losses["KL Divergence"] += loss['KL Divergence'].item()
+                        val_losses["Reconstruction Loss"] += loss['Reconstruction Loss'].item()
+                        num_val_batches += 1
+
+                avg_val_losses = {k: v/num_val_batches for k, v in val_losses.items()}
+                current_val_loss = avg_val_losses["Total Loss"]
+                scheduler.step(current_val_loss)
+
+                # Early stopping check
+                if current_val_loss < best_val_loss:
+                    best_val_loss = current_val_loss
+                    patience_counter = 0
+                    self.best_trial_logger = logger_trial
+                    
+                    checkpoint = {
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'scheduler_state_dict': scheduler.state_dict(),
+                        'trial_number': trial.number,
+                        'loss': best_val_loss
+                    }
+                    torch.save(checkpoint, checkpoint_dir / f"trial_{trial.number}_checkpoint.pt")
+                    logger_path = checkpoint_dir / f"trial_{trial.number}_logger.pkl"
+                    with open(logger_path, 'wb') as f:
+                        pickle.dump(logger_trial, f)
+                else:
+                    patience_counter += 1
+                    if patience_counter >= self.config['training']['early_stopping_patience']:
+                        break
+                
+                logger_trial.on_train_step(avg_losses)
+                logger_trial.on_val_step(avg_val_losses)
+                
+                trial.report(current_val_loss, epoch)
+                if trial.should_prune():
+                    raise optuna.exceptions.TrialPruned()
+
+            return best_val_loss
 
     def run_optimization(self):
         """Run the full optimization process."""
-        logger.info(f"Starting Optuna optimization with {self.config['optuna']['n_trials']} trials")
+        cv_text = f" with {self.cv_folds}-fold cross-validation" if self.use_cv else ""
+        logger.info(f"Starting Optuna optimisation{cv_text} with {self.config['optuna']['n_trials']} trials")
         
         try:
-            logger.info(f"Running optimization with {self.n_jobs} parallel workers")
+            logger.info(f"Running optimisation with {self.n_jobs} parallel workers")
             
             self.study.optimize(
                 self.objective, 
@@ -340,7 +564,11 @@ class OptunaTrainer:
             best_value = self.study.best_value
             best_trial = self.study.best_trial
             
-            logger.info(f"Best trial (#{best_trial.number}) achieved validation loss: {best_value}")
+            if self.use_cv:
+                logger.info(f"Best trial (#{best_trial.number}) achieved CV score: {best_value:.4f}")
+            else:
+                logger.info(f"Best trial (#{best_trial.number}) achieved validation loss: {best_value:.4f}")
+            
             logger.info("Best hyperparameters:")
             for key, value in best_params.items():
                 logger.info(f"\t{key}: {value}")
@@ -365,15 +593,24 @@ class OptunaTrainer:
             # Remove checkpoints from non-best trials
             logger.info(f"Removing non-best trials from checkpoints/")
             best_checkpoint_filename = f"trial_{best_trial.number}_checkpoint.pt"
+            best_cv_results_filename = f"trial_{best_trial.number}_cv_results.pkl"
             best_checkpoint_path = checkpoint_dir / best_checkpoint_filename
             best_logger_path = checkpoint_dir / f"trial_{best_trial.number}_logger.pkl"
+            best_cv_results_path = checkpoint_dir / best_cv_results_filename
+            
             for file in checkpoint_dir.glob("trial_*_checkpoint.pt"):
                 if file.name != best_checkpoint_filename:
                     file.unlink()
             for file in checkpoint_dir.glob("trial_*_logger.pkl"):
-                if file.name != best_logger_path:
+                if file.name != f"trial_{best_trial.number}_logger.pkl":
                     file.unlink()
+            for file in checkpoint_dir.glob("trial_*_cv_results.pkl"):
+                if file.name != best_cv_results_filename:
+                    file.unlink()
+                    
             logger.info(f"Best checkpoint saved as {best_checkpoint_path}")
+            if self.use_cv and best_cv_results_path.exists():
+                logger.info(f"Best CV results saved as {best_cv_results_path}")
             
             # Create training config with best parameters
             train_config = self.config.copy()
@@ -397,7 +634,9 @@ class OptunaTrainer:
             logger.info(f"Saved configuration with best params to {best_config_file}")
             
             # Retrain model with best params
-            logger.info("Retraining model with best parameters...")
+            retrain_text = " using full dataset" if self.use_cv else ""
+            logger.info(f"Retraining model with best parameters{retrain_text}...")
+            
             final_model = train_model(
                 self.train_data,
                 self.train_covariates,
