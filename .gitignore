@@ -1,0 +1,7 @@
+*.egg-info
+.ipynb_checkpoints
+configs/custom_config.yaml
+configs/optuna_config.yaml
+output/
+**/__pycache__/
+**/**/__pycache__/
