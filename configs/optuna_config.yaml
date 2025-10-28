@@ -1,6 +1,6 @@
 model:
-  non_linear: true            # Use non-linear activations in encoder/decoder
-  variance_type: "two_heads"  # Variance modelling: "two_heads" (default), "global_learnable", or "covariate_specific"
+  non_linear: true             # Use non-linear activations in encoder/decoder
+  variance_type: "two_heads"   # Variance modelling: "two_heads" (default), "global_learnable", or "covariate_specific"
   # Note: hidden_dim, latent_dim, beta, and learning_rate are searched by Optuna
 
 training:
@@ -31,7 +31,7 @@ optuna:
       choices: [0.75, 1.0, 1.25]
 
 device:
-  gpu: true             # Use GPU if available
+  gpu: true               # Use GPU if available
   min_gpu_memory_gb: 1.0  # Minimum GPU memory threshold for Optuna trials
 
 paths:
