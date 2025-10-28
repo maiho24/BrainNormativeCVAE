@@ -1,13 +1,13 @@
 # BrainNormativeCVAE
 
-A Python package for normative modeling of brain imaging data using conditional Variational Autoencoders (cVAE).
+A Python package for normative modelling of brain imaging data using conditional Variational Autoencoders (cVAE).
 
 ## Overview
 
 BrainNormativeCVAE is a comprehensive toolkit for building and applying normative models to neuroimaging data. It implements a conditional Variational Autoencoder approach that can:
 - Learn normative patterns from brain imaging data
-- Perform robust statistical inference using bootstrap analysis
-- Generate probabilistic estimates (means and standard deviations) for input covariates
+- Generate probabilistic estimates (means and variances) for input covariates
+- Optionally perform robust statistical inference using bootstrap analysis for confidence intervals
 
 ## Installation
 
@@ -41,13 +41,13 @@ brain-cvae-train --help
 
 # Direct training with specified parameters
 brain-cvae-train \
-    --config configs/default_config.yaml \
+    --config configs/direct_config.yaml \
     --mode direct \
     --gpu
 
-# Hyperparameter optimization with Optuna
+# Hyperparameter optimisation with Optuna
 brain-cvae-train \
-    --config configs/default_config.yaml \
+    --config configs/optuna_config.yaml \
     --mode optuna \
     --gpu
 ```
@@ -58,21 +58,6 @@ brain-cvae-train \
 # Show help message and available options
 brain-cvae-inference --help
 
-# Run inference with bootstrap analysis (default behaviour)
-brain-cvae-inference \
-    --model_path path/to/output/models/final_model.pkl \
-    --config configs/default_config.yaml \
-    --num_samples 1000 \
-    --bootstrap \
-    --num_bootstraps 1000
-
-# Run inference with simple sampling (no bootstrap)
-brain-cvae-inference \
-    --model_path path/to/output/models/final_model.pkl \
-    --config configs/default_config.yaml \
-    --num_samples 1000 \
-    --no-bootstrap
-
 # Run inference without config file (specifying directories directly)
 brain-cvae-inference \
     --model_path path/to/output/models/final_model.pkl \
@@ -80,6 +65,17 @@ brain-cvae-inference \
     --output_dir path/to/output \
     --num_samples 1000 \
     --no-bootstrap
+    --gpu
+
+# Run inference with bootstrap analysis for confidence intervals
+brain-cvae-inference \
+    --model_path path/to/output/models/final_model.pkl \
+    --data_dir path/to/data \
+    --output_dir path/to/output \
+    --num_samples 1000 \
+    --bootstrap \
+    --num_bootstraps 1000
+    --gpu
 ```
 
 ## Data Format
@@ -97,11 +93,11 @@ For inference, the following files should be present in the data directory:
 The following covariates are expected for the current implementation:
 - Age (continuous)
 - eTIV (continuous)
-- Sex (categorical)
-- Diabetes Status (categorical)
-- Smoking Status (categorical)
-- Hypercholesterolemia Status (categorical)
-- Obesity Status (categorical)
+- Sex (binary)
+- Diabetes Status (binary)
+- Smoking Status (binary)
+- Hypercholesterolemia Status (binary)
+- Obesity Status (binary)
 
 To apply the package to other covariates, modifications are required in the `process_covariates()` function located in `utils/data.py`.
 
@@ -117,6 +113,8 @@ model:
   non_linear: true
   beta: 1.0             # Required if "direct" mode is used
   learning_rate: 0.001  # Required if "direct" mode is used
+  variance_type: "two_heads"  # Variance modelling: "two_heads" (default), "global_learnable", or "covariate_specific"
+  varnet_hidden_dim: "32"     # Required if variance_type is "covariate_specific"
 
 training:
   epochs: 200           # Required if "direct" mode is used
@@ -124,8 +122,15 @@ training:
   early_stopping_patience: 20
   validation_split: 0.15
 
+cross_validation: # Optional - only used in Optuna mode
+  enabled: false        # Set to true to enable k-fold cross-validation during hyperparameter search
+  n_folds: 5            # Number of folds for cross-validation
+  stratified: false     # Use stratified k-fold (attempts to preserve covariate distribution)
+  random_state: 42      # Random seed for reproducibility
+
 optuna: # Optional
   n_trials: 100
+  n_jobs: -1            # Number of parallel trials (-1 for auto: 1 per GPU or 1 for CPU)
   study_name: "cvae_optimisation"
   search_space:
     hidden_dim:
@@ -145,10 +150,31 @@ optuna: # Optional
       type: "categorical"
       choices: [0.75, 1.0]
 
+device:
+  gpu: true
+
 paths:
   data_dir: "path/to/data/"
   output_dir: "path/to/output/"
 ```
+
+#### Variance Modelling Options
+
+The package supports three variance modelling approaches:
+
+1. **Two Heads (Default, Recommended)**: The decoder has separate heads for mean and variance, allowing fully learnable variance
+2. **Global Learnable**: A single learnable parameter shared across all features
+3. **Covariate-Specific**: A small network that maps covariates to variance (requires `varnet_hidden_dim`)
+
+#### Cross-Validation (Optuna Mode Only)
+
+When using Optuna for hyperparameter optimisation, you can enable k-fold cross-validation for more robust hyperparameter selection:
+
+- Standard k-fold: Randomly splits data into k folds
+- Stratified k-fold: Attempts to preserve covariate distributions across folds
+
+**Note:** Cross-validation increases computation time but provides more reliable hyperparameter estimates, especially with limited data.
+
 #### Command Line Arguments
 
 ```
@@ -160,15 +186,16 @@ Optional arguments:
   --data_dir PATH            Override data directory specified in config file
   --output_dir PATH          Override output directory specified in config file
   --gpu                      Use GPU for training if available
+  --suffix TEXT              Suffix for the output folder's name
 ```
 The package provides two training options:
 - **direct** (default): Train with parameters specified in config file
-- **optuna**: Perform hyperparameter optimization using the [Optuna](https://optuna.org/) framework
+- **optuna**: Perform hyperparameter optimisation using the [Optuna](https://optuna.org/) framework
 
 ### Inference Configuration
 For inference, you can either:
-1. Use a config file with the `--config` option
-2. Specify required directories directly using `--data_dir` and `--output_dir`
+1. Specify required directories directly using `--data_dir` and `--output_dir`
+2. Use a config file with the `--config` option
 
 If using a config file, only these sections are required:
 
@@ -183,15 +210,16 @@ Note: Command line arguments (`--data_dir`, `--output_dir`) will override the co
 #### Bootstrap vs Simple Sampling
 The package offers two analysis modes for inference:
 
-##### Bootstrap Analysis (Default)
-* Provides robust statistical estimates with confidence intervals
-* More computationally intensive but offers uncertainty quantification
-* Outputs: means, variances, and confidence intervals
-
-##### Simple Sampling
+##### Simple Sampling (Default)
 * Fast computation with basic statistics
 * Provides conditional means and variances without confidence intervals
 * Outputs: means and variances only
+
+##### Bootstrap Analysis (Optional)
+* Provides robust statistical estimates with confidence intervals
+* More computationally intensive but offers uncertainty quantification
+* Outputs: means, variances, and confidence intervals
+* Enable with `--bootstrap` flag
 
 #### Command Line Arguments
 
@@ -204,12 +232,14 @@ Required arguments (either --config OR both --data_dir and --output_dir must be 
 
 Optional arguments:
   --num_samples INT          Number of samples for analysis (default: 1000)
-  --bootstrap                Enable bootstrap analysis (default: enabled)
-  --no-bootstrap             Disable bootstrap analysis and use simple sampling
+  --bootstrap                Enable bootstrap analysis with confidence intervals
+  --no-bootstrap             Use simple sampling without bootstrap (default)
   --num_bootstraps INT       Number of bootstrap iterations (default: 1000, only used with --bootstrap)
   --confidence_level FLOAT   Confidence level for bootstrap CIs (default: 0.95, only used with --bootstrap)
   --prediction_type TYPE     Method for prediction: covariate or dual_input (default: covariate)
   --gpu                      Use GPU for inference if available
+  --summary_report           Generate summary reports (feature importance and sensitivity analysis)
+  --suffix TEXT              Suffix for the output folder's name
 ```
 
 The package provides two prediction modes:
@@ -220,33 +250,7 @@ The package provides two prediction modes:
 
 The package organises all outputs in a consistent directory structure. The structure varies depending on whether bootstrap analysis is enabled:
 
-### With Bootstrap Analysis (Default)
-```
-output_dir/
-├── logs/                               # Logging directory
-│   ├── training_YYYYMMDD_HHMMSS.log    # Training process logs
-│   └── inference_YYYYMMDD_HHMMSS.log   # Inference and bootstrap analysis logs
-│
-├── models/                             # Model directory
-│   ├── config.yaml                     # Training configuration parameters
-│   ├── final_model.pkl                 # Saved trained model
-│   └── best_params.yaml                # Best hyperparameters (Optuna mode only)
-│
-└── results/                            # Analysis results directory
-    ├── bootstrapped_means.csv          # Mean predictions for each covariate combination
-    ├── bootstrapped_variances.csv      # Variance of predictions for each combination
-    │
-    ├── ci_means_lower.csv              # Lower confidence interval bounds for means
-    ├── ci_means_upper.csv              # Upper confidence interval bounds for means
-    ├── ci_variances_lower.csv          # Lower confidence interval bounds for variances
-    ├── ci_variances_upper.csv          # Upper confidence interval bounds for variances
-    │
-    ├── feature_variability.csv         # Variability of each feature across covariates
-    ├── covariate_sensitivity.csv       # Impact of each covariate on predictions
-    └── summary_statistics.xlsx         # Overall statistical summary of results
-```
-
-### With Simple Sampling (--no-bootstrap)
+### With Simple Sampling (Default)
 
 ```
 output_dir/
@@ -261,34 +265,110 @@ output_dir/
 │
 └── results/                            # Analysis results directory
     ├── means.csv                       # Mean predictions for each covariate combination
-    ├── variances.csv                   # Variance of predictions for each combination
+    ├── total_variances.csv             # Total variance (within + between) for each combination
+    ├── within_variances.csv            # Within-group variance component
+    ├── between_variances.csv           # Between-group variance component
     │
-    ├── feature_variability.csv         # Variability of each feature across covariates
-    ├── covariate_sensitivity.csv       # Impact of each covariate on predictions
-    └── summary_statistics.xlsx         # Overall statistical summary of results
+    ├── feature_variability.csv         # Variability of each feature across covariates (optional)
+    ├── covariate_sensitivity.csv       # Impact of each covariate on predictions (optional)
+    └── summary_statistics.xlsx         # Overall statistical summary of results (optional)
+```
+
+### With Bootstrap Analysis (--bootstrap)
+```
+output_dir/
+├── logs/                               # Logging directory
+│   ├── training_YYYYMMDD_HHMMSS.log    # Training process logs
+│   └── inference_YYYYMMDD_HHMMSS.log   # Inference and bootstrap analysis logs
+│
+├── models/                             # Model directory
+│   ├── config.yaml                     # Training configuration parameters
+│   ├── final_model.pkl                 # Saved trained model
+│   └── best_params.yaml                # Best hyperparameters (Optuna mode only)
+│
+└── results/                            # Analysis results directory
+    ├── means.csv                       # Mean predictions for each covariate combination
+    ├── total_variances.csv             # Total variance (within + between) for each combination
+    ├── within_variances.csv            # Within-group variance component
+    ├── between_variances.csv           # Between-group variance component
+    │
+    ├── ci_means_lower.csv              # Lower confidence interval bounds for means
+    ├── ci_means_upper.csv              # Upper confidence interval bounds for means
+    ├── ci_variances_lower.csv          # Lower CI bounds for within-group variances
+    ├── ci_variances_upper.csv          # Upper CI bounds for within-group variances
+    ├── ci_total_variances_lower.csv    # Lower CI bounds for total variances
+    ├── ci_total_variances_upper.csv    # Upper CI bounds for total variances
+    │
+    ├── feature_variability.csv         # Variability of each feature across covariates (optional)
+    ├── covariate_sensitivity.csv       # Impact of each covariate on predictions (optional)
+    └── summary_statistics.xlsx         # Overall statistical summary of results (optional)
 ```
 
 ### Results File Descriptions
 
+#### Simple Sampling Results (Default)
+- `means.csv`: Mean predictions for each covariate combination
+- `total_variances.csv`: Total variance for each covariate combination
+- `within_variances.csv`: Within-group variance component
+- `between_variances.csv`: Between-group variance component
+
 #### Bootstrap Analysis Results (--bootstrap)
-- `bootstrapped_means.csv`: Average predictions for each covariate combination across bootstrap samples
-- `bootstrapped_variances.csv`: Variation in predictions for each covariate combination across bootstrap samples
+- `means.csv`: Average predictions for each covariate combination across bootstrap samples
+- `total_variances.csv`: Total variance for each covariate combination
+- `within_variances.csv`: Within-group variance component
+- `between_variances.csv`: Between-group variance component
 - `ci_means_lower.csv`: Lower bound of confidence interval for mean predictions
 - `ci_means_upper.csv`: Upper bound of confidence interval for mean predictions
-- `ci_variances_lower.csv`: Lower bound of confidence interval for prediction variances
-- `ci_variances_upper.csv`: Upper bound of confidence interval for prediction variances
+- `ci_variances_lower.csv`: Lower bound of CI for within-group variances
+- `ci_variances_upper.csv`: Upper bound of CI for within-group variances
+- `ci_total_variances_lower.csv`: Lower bound of CI for total variances
+- `ci_total_variances_upper.csv`: Upper bound of CI for total variances
 
-#### Simple Sampling Results (--no-bootstrap)
-- `means.csv`: Mean predictions for each covariate combination
-- `variances.csv`: Variance of predictions for each covariate combination
+#### Variance Components
 
-#### Feature Analysis
+The package decomposes the total variance into two components using the law of total variance:
+
+- **Within-group variance**: Average variance from the decoder's predicted distributions across latent samples
+- **Between-group variance**: Variance of the predicted means across latent samples  
+- **Total variance**: Sum of within-group and between-group variances
+
+#### Feature Analysis (Optional, with --summary_report)
 - `feature_variability.csv`: Measures how much each feature varies across different covariate combinations
 - `covariate_sensitivity.csv`: Quantifies how much each covariate influences the predictions
 - `summary_statistics.xlsx`: Comprehensive statistical summary including:
   - Global means and standard deviations
   - Quantile distributions (25th, 50th, 75th percentiles)
   - Summary statistics for both means and variances
+
+## Advanced Features
+
+### Hyperparameter Optimisation with Cross-Validation
+
+For small to medium-sized datasets, enabling cross-validation during Optuna optimisation can provide more reliable hyperparameter estimates:
+
+```yaml
+cross_validation:
+  enabled: true
+  n_folds: 5
+  stratified: true  # Attempts to preserve covariate distributions
+  random_state: 42
+```
+
+This approach is particularly useful when:
+- Your dataset is relatively small
+- You want to ensure hyperparameters generalise well
+- You have sufficient computational resources (CV increases runtime)
+
+### Parallel Training with Optuna
+
+The package supports parallel hyperparameter search on multi-GPU systems:
+
+```yaml
+optuna:
+  n_jobs: -1  # Auto-detect: uses 1 trial per GPU, or 1 for CPU
+  # or specify manually:
+  # n_jobs: 4  # Run 4 trials in parallel
+```
 
 ## Contributing
 

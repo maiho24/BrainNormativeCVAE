@@ -70,15 +70,15 @@ def create_parser():
     bootstrap_group.add_argument(
         '--bootstrap',
         action='store_true',
-        default=True,
-        help='Enable bootstrap analysis (default: enabled)'
+        default=False,
+        help='Enable bootstrap analysis'
     )
     
     bootstrap_group.add_argument(
         '--no-bootstrap',
         action='store_false',
         dest='bootstrap',
-        help='Disable bootstrap analysis and use simple sampling instead'
+        help='Disable bootstrap analysis and use simple sampling instead (default)'
     )
     
     parser.add_argument(

@@ -1,0 +1,22 @@
+model:
+  hidden_dim: "128_64"  # Hidden layer architecture in string format, e.g., "128_64" for two layers
+  latent_dim: 32        # Latent dimension size
+  non_linear: true      # Use non-linear activations in encoder/decoder
+  beta: 1.0             # Beta parameter for KL divergence weighting
+  learning_rate: 0.001  # Learning rate for Adam optimiser
+  variance_type: "two_heads"  # Variance modelling: "two_heads" (default), "global_learnable", or "covariate_specific"
+  # varnet_hidden_dim: "32"   # Uncomment if variance_type is "covariate_specific"
+
+training:
+  epochs: 200           # Maximum number of training epochs
+  batch_size: 64        # Batch size for training
+  early_stopping_patience: 20  # Number of epochs to wait before early stopping
+  validation_split: 0.15       # Proportion of data to use for validation
+
+device:
+  gpu: true             # Use GPU if available
+
+paths:
+  data_dir: "/path/to/data/"
+  output_dir: "/path/to/output/"
+  
