@@ -1,0 +1,46 @@
+model:
+  non_linear: true            # Use non-linear activations in encoder/decoder
+  variance_type: "two_heads"  # Variance modelling: "two_heads" (default), "global_learnable", or "covariate_specific"
+  # Note: hidden_dim, latent_dim, beta, and learning_rate are searched by Optuna
+
+training:
+  epochs: 200                  # Maximum number of training epochs per trial
+  early_stopping_patience: 20  # Number of epochs to wait before early stopping
+  validation_split: 0.15       # Proportion of data to use for validation (reduced if calibration enabled)
+
+optuna:
+  n_trials: 100                # Number of trials for hyperparameter search
+  n_jobs: -1                   # Number of parallel trials (-1 for auto: 1 per GPU or 1 for CPU)
+  study_name: "cvae_optimisation"
+  search_space:
+    hidden_dim:
+      type: "categorical"
+      choices: ["32", "64_32", "128_64", "256_128_64"]
+    latent_dim:
+      type: "categorical"
+      choices: [16, 32, 64]
+    learning_rate:
+      type: "loguniform"
+      min: 1e-5
+      max: 1e-3
+    batch_size:
+      type: "categorical"
+      choices: [32, 64, 128]
+    beta:
+      type: "categorical"
+      choices: [0.75, 1.0, 1.25]
+
+device:
+  gpu: true             # Use GPU if available
+  min_gpu_memory_gb: 1.0  # Minimum GPU memory threshold for Optuna trials
+
+paths:
+  data_dir: "/path/to/data/"
+  output_dir: "/path/to/output/"
+
+cross_validation: # Optional - k-fold cross-validation for hyperparameter selection
+  enabled: false               # Set to true to enable k-fold cross-validation during Optuna search
+  n_folds: 5                   # Number of folds for cross-validation
+  stratified: false            # Use stratified k-fold (attempts to preserve covariate distribution)
+  random_state: 42             # Random seed for reproducibility
+  
